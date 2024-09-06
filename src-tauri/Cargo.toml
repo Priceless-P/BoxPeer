@@ -1,0 +1,28 @@
+[package]
+name = "BoxPeer"
+version = "0.0.1"
+description = "A decentralized peer-2-peer CDN"
+authors = ["Prisca Chidimma"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "1", features = [] }
+
+[dependencies]
+tauri = { version = "1", features = ["shell-open"] }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4.5.6", features = ["derive"] }
+lazy_static = {version = "1.4"}
+futures = { version= "0.3" }
+libp2p = { version = "0.54.1", features = [ "tokio", "cbor", "dns", "kad", "noise", "macros", "request-response", "tcp", "websocket", "yamux"] }
+tracing = { version = "0.1.40" }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+void = "1.0.2"
+serde_json = "1"
+
+[features]
+# This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
