@@ -35,10 +35,10 @@ const Contents: React.FC = () => {
   };
 
   return (
-    <Layout style={{ minHeight: '100vh', backgroundColor: '#fff' }}>
+    <Layout style={{ minHeight: '100vh' }}>
       <Nav />
 
-      <Content style={{ backgroundColor: '#fff', padding: '20px 50px' }}>
+      <Content style={{ padding: '20px 50px' }}>
         <Search placeholder="Search for content..." enterButton onSearch={handleSearch} />
       </Content>
 

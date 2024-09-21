@@ -1,21 +1,21 @@
 import { Layout, Typography, Button, Row, Col, Card, Statistic } from 'antd';
 import { DatabaseOutlined, CloudServerOutlined, UserOutlined } from '@ant-design/icons';
 import Nav from './Nav';
-import Footer_ from './Footer';
 import './HomePage.css';
+
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
 
 const Home = () => {
     return (
-        <Layout style={{ minHeight: '100vh', backgroundColor: '#fff' }}>
+        <Layout style={{ minHeight: '100vh' }}>
             <Nav />
             {/* Hero Section */}
-            <Content style={{ backgroundColor: '#ede8f5', padding: '50px 0' }}>
+            <Content style={{  padding: '50px 0' }}>
                 <Row justify="center" align="middle" gutter={32}>
                     <Col xs={24} md={12} style={{ textAlign: 'center' }} >
-                        <Title level={1} style={{ color: '#3d52a0' }}>Decentralized Content Delivery Network</Title>
+                        <Title level={1}>Decentralized Content Delivery Network</Title>
                         <Text style={{ fontSize: '18px', color: '#555' }}>
                             Empowering fast and secure content delivery through a decentralized peer-to-peer network.
                         </Text>
@@ -43,7 +43,6 @@ const Home = () => {
                                 title="Data Distributed"
                                 value={500}
                                 precision={0}
-                                valueStyle={{ color: '#3d52a0' }}
                                 prefix={<DatabaseOutlined />}
                                 suffix="TB"
                             />
@@ -55,7 +54,6 @@ const Home = () => {
                                 title="Active Nodes"
                                 value={1200}
                                 precision={0}
-                                valueStyle={{ color: '#3d52a0' }}
                                 prefix={<CloudServerOutlined />}
                             />
                         </Card>
@@ -66,7 +64,7 @@ const Home = () => {
                                 title="Satisfied Users"
                                 value={300000}
                                 precision={0}
-                                valueStyle={{ color: '#3d52a0' }}
+
                                 prefix={<UserOutlined />}
                             />
                         </Card>
@@ -76,7 +74,7 @@ const Home = () => {
 
             {/* How It Works Section */}
             <Content style={{ padding: '50px 50px' }}>
-                <Title level={2} style={{ textAlign: 'center', marginBottom: '40px', color: '#3d52a0' }}>
+                <Title level={2} style={{ textAlign: 'center', marginBottom: '40px' }}>
                     How It Works
                 </Title>
                 <Row gutter={16}>
@@ -104,7 +102,7 @@ const Home = () => {
                 </Row>
             </Content>
 
-            <Footer_ />
+
         </Layout>
     );
 };

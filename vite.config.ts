@@ -1,21 +1,38 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import net from 'net';
 
-// https://vitejs.dev/config/
-export default defineConfig(async () => ({
+// Default port to use
+const defaultPort = 1420;
+
+// Function to find an available port synchronously
+function getAvailablePort(startPort: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(startPort, () => {
+      server.once('close', () => resolve(startPort));
+      server.close();
+    });
+    server.on('error', () => resolve(getAvailablePort(startPort + 1)));
+  });
+}
+
+// Use a synchronous method to determine the port before exporting the config
+let port: number = defaultPort;
+getAvailablePort(defaultPort).then(availablePort => {
+  port = availablePort;
+}).catch(error => {
+  console.error('Failed to find an available port:', error);
+});
+
+export default defineConfig({
   plugins: [react()],
-
-  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-  //
-  // 1. prevent vite from obscuring rust errors
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    port: 1420,
-    strictPort: true,
+    port: port,
+    strictPort: false, // Allow Vite to choose a different port if the specified one is in use
     watch: {
-      // 3. tell vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
   },
-}));
+});

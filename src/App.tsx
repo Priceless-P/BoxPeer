@@ -7,26 +7,31 @@ import ContentDetails from './pages/ContentDetails';
 import ProviderDashboard from './pages/ProviderDashboard';
 import 'antd/dist/reset.css';
 import PeerDashboard from './pages/PeerDashboard';
-import { invoke } from "@tauri-apps/api/tauri";
+import CallbackPage from "./pages/CallbackPage";
+import LoginPage from "./pages/LoginPage";
+
+// import { invoke } from "@tauri-apps/api/tauri";
 
 const App: React.FC = () => {
-    const startNetwork = async () => {
-        try {
-          await invoke('start_network', { secretKeySeed: 1, listenAddress: '0.0.0.0', peer: 'somePeerAddress' });
-          console.log('Network started');
-        } catch (error) {
-          console.error('Failed to start network:', error);
-        }
-      };
 
+    const theme = {
+        token: {
+            colorPrimary: '#AD49E1',   // Main color
+            colorBgBase: '#EBD3F8',     // Background color
+            colorTextBase: '#2E073F',   // Primary text color
+            colorTextSecondary: '#7A1CAC', // Secondary text color
+        },
+    };
     return (
-        <ConfigProvider theme={{ token: { colorPrimary: '#7091e6', colorBgBase: '#ede8f5' } }}>
+        <ConfigProvider theme={theme}>
             <div className="App">
                 <Router>
                     <Routes>
                         <Route path="/" element={<Home />} />
+                        <Route path="/login" element={<LoginPage />} />
+                        <Route path="/callback" element={<CallbackPage />} />
                         <Route path="/contents" element={<Contents />} />
-                        <Route path="/dashboard" element={<ProviderDashboard startNetwork={startNetwork} />} />
+                        <Route path="/dashboard" element={<ProviderDashboard />} />
                         <Route path="/content/:id" element={<ContentDetails />} />
                         <Route path="/node-dashboard" element={<PeerDashboard />} />
                     </Routes>

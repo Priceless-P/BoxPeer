@@ -15,6 +15,12 @@
       "shell": {
         "all": false,
         "open": true
+      },
+      "fs": {
+        "all": true
+      },
+      "dialog": {
+        "all": true
       }
     },
     "windows": [

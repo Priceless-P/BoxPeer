@@ -10,24 +10,33 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@tauri-apps/api": "^1",
     "@aptos-labs/ts-sdk": "^1.27.1",
+    "@aptos-labs/wallet-adapter-ant-design": "^3.0.13",
+    "@aptos-labs/wallet-adapter-react": "^3.6.2",
+    "@emotion/react": "^11.13.3",
+    "@emotion/styled": "^11.13.0",
+    "@mui/material": "^6.0.2",
+    "@noble/ed25519": "^2.1.0",
+    "@tauri-apps/api": "^1",
     "antd": "^5.20.2",
     "aptos": "^1.21.0",
+    "petra-plugin-wallet-adapter": "^0.4.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.26.1",
     "recharts": "^2.12.7",
     "vis-network": "^9.1.9",
-    "react-router-dom": "^6.26.1",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "zod": "^3.22.4",
+    "zustand": "^4.5.2"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^1",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
-    "@vitejs/plugin-react": "^4.2.1",
     "@types/react-router-dom": "^5.3.3",
+    "@vitejs/plugin-react": "^4.2.1",
     "typescript": "^5.2.2",
-    "vite": "^5.3.1",
-    "@tauri-apps/cli": "^1"
+    "vite": "^5.3.1"
   }
 }
