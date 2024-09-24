@@ -6,9 +6,11 @@ version = 3
 name = "BoxPeer"
 version = "0.0.1"
 dependencies = [
+ "base64 0.22.1",
  "clap",
  "devtools",
  "futures",
+ "hex",
  "lazy_static",
  "libp2p",
  "libp2p-gossipsub",
@@ -21,6 +23,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "void",

@@ -2,16 +2,17 @@ mod content;
 mod network;
 mod node;
 
-use crate::content::{ContentManager, split_file_into_chunks};
+use crate::content::ContentManager;
 use crate::node::{
     load_or_generate_keypair, load_peer_info, save_node_type, save_peer_info, NodeType,
 };
 use futures::future::FutureExt;
-use futures::StreamExt;
+use tokio_stream::StreamExt;
 use libp2p::{core::Multiaddr, multiaddr::Protocol, PeerId};
 use std::error::Error;
 use std::pin::Pin;
 use std::sync::Arc;
+use base64::encode;
 use tauri::{async_runtime::spawn, State};
 use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
@@ -35,7 +36,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Spawn the network task to run in the background
     spawn(network_event_loop.run());
 
-    let content_manager = ContentManager::new().await.expect("Failed to initialize content manager");
+    let content_manager = ContentManager::new()
+        .await
+        .expect("Failed to initialize content manager");
     let app_state = AppState {
         network_client: Arc::new(Mutex::new(network_client)),
         network_events: Arc::new(Mutex::new(Box::pin(network_events))),
@@ -86,19 +89,32 @@ async fn start_listening(state: State<'_, AppState>) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
 
     let peer_id: PeerId = id.parse().expect("Error parsing");
-    let _p = client.find_peers(peer_id).await;
+    client.find_peers(peer_id).await;
     let actual_listening_addr = client
         .get_listening_addr()
         .await
         .expect("Error getting listening address");
+    let existing_nodes = state.content_manager.lock().await.get_nodes().await?;
+    if !existing_nodes.iter().any(|node| *node == peer_id) {
+        // If it doesn't exist, add it
+        state.content_manager.lock().await.add_node(peer_id.to_string()).await?;
+    }
 
-    // Now you can use `peer_info` safely again
     if peer_info.is_none()
         || peer_info.as_ref().unwrap().peer_id.is_empty()
         || peer_info.as_ref().unwrap().listening_addr.is_empty()
     {
         save_peer_info(&id, &actual_listening_addr).expect("Error saving peer info");
-        // Update peer_id and listening_addr, but keep node_type
+    }
+
+    let cached_contents = state
+        .content_manager
+        .lock()
+        .await
+        .read_cached_chunks()
+        .await?;
+    for content_hash in cached_contents {
+        client.start_providing(content_hash).await;
     }
     Ok(id)
 }
@@ -130,7 +146,8 @@ async fn lock_content(
             chunk_index,
             chunk_size,
             peer_info.peer_id,
-        ).await
+        )
+        .await
         .expect("Error locking content");
     //advertise in DHT
     client.start_providing(content_hash.clone()).await;
@@ -145,7 +162,8 @@ async fn unlock_content(state: State<'_, AppState>, content_hash: String) -> Res
         .content_manager
         .lock()
         .await
-        .unlock_content(content_hash.clone(), peer_info.peer_id).await
+        .unlock_content(content_hash.clone(), peer_info.peer_id)
+        .await
         .expect("Error locking content");
     //advertise in DHT
     client.start_providing(content_hash.clone()).await;
@@ -157,7 +175,10 @@ async fn get_peerid_locked_content(state: State<'_, AppState>) -> Result<Vec<Str
     let content_manager = state.content_manager.lock().await;
     let peer_info = load_peer_info().expect("Peer Id not found");
     // Fetch locked content hashes for the given peer_id
-    match content_manager.get_peerid_locked_content(peer_info.peer_id).await {
+    match content_manager
+        .get_peerid_locked_content(peer_info.peer_id)
+        .await
+    {
         Ok(content_list) => Ok(content_list),
         Err(err) => Err(err.to_string()),
     }
@@ -169,7 +190,10 @@ async fn get_peerid_provided_content(state: State<'_, AppState>) -> Result<Vec<S
 
     let peer_info = load_peer_info().expect("Peer Id not found");
     // Fetch provided content hashes for the given peer_id
-    match content_manager.get_peerid_provided_content(peer_info.peer_id).await {
+    match content_manager
+        .get_peerid_provided_content(peer_info.peer_id)
+        .await
+    {
         Ok(content_list) => Ok(content_list),
         Err(err) => Err(err.to_string()),
     }
@@ -226,36 +250,70 @@ async fn provide_file(
     content_hash: String,
     file_name: String,
 ) -> Result<(), String> {
+    let peer_info = load_peer_info().ok_or("Peer Id not found".to_string())?;
 
-    let peer_info = load_peer_info().expect("Peer Id not found");
     let file_size = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
     let mut client = state.network_client.lock().await;
 
+    // Add provided content to the content manager
     state
         .content_manager
         .lock()
         .await
-        .add_provided_content(content_hash.clone(), peer_info.peer_id, file_size, file_name).await
-        .expect("Error providing content");
-
-    let chunk_size = 4 * 1024 * 1024; // 4 MB chunk size
-    let file_chunks = split_file_into_chunks(&path, chunk_size).await.expect("Error spliting file");
-    let peers = client.get_available_peers().await.expect("Error");
-    println!("Here");
-    // Distribute file chunks and get peer-to-chunk assignments
-    let peer_chunk_map =
-        state
-            .content_manager
-            .lock()
-            .await.
-        distribute_file_chunks(content_hash.clone(), peers, file_chunks)
+        .add_provided_content(
+            content_hash.clone(),
+            peer_info.peer_id.to_string(),
+            file_size,
+            file_name,
+        )
         .await
-        .expect("Error distributing file chunks");
+        .map_err(|_| "Error providing content".to_string())?;
+
+    // Define the chunk size (4 MB)
+    let chunk_size = 4 * 1024 * 1024; // 4 MB chunk size
+
+    // Split the file into chunks
+    let file_chunks = state
+        .content_manager
+        .lock()
+        .await
+        .split_file_into_chunks(&path, chunk_size)
+        .await
+        .map_err(|_| "Error splitting file".to_string())?;
+
+    // Get the available peers
+    let peers = client
+        .get_available_peers()
+        .await
+        .map_err(|_| "Error getting peers".to_string())?;
+
+    // Distribute file chunks among peers
+    let peer_map = state
+        .content_manager
+        .lock()
+        .await
+        .distribute_file_chunks(content_hash.clone(), peers, file_chunks.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Send file chunks to each assigned peer
+    let mut index = 1;
+    for (peer, chunk_index) in peer_map {
+        // Prepare the content_chunk_index for this peer
+        let content_chunk_index = format!("{}_chunk_{}", content_hash.clone(), chunk_index);
+    let content_chunk_hash = encode(file_chunks[index - 1].clone());
+        // Send the corresponding chunk to the peer
+        client
+            .send_chunk_to_peer(peer, content_chunk_index.clone(), content_chunk_hash)
+            .await
+            .map_err(|e| e.to_string())?;
+        index += 1;
+    }
 
     // Notify peers to provide the chunks
-    for (peer, content_chunk_index) in peer_chunk_map {
-        client.notify_peer_to_provide_chunk(peer, content_chunk_index).await?;
-    }
+    // for (peer, content_chunk_index) in peer_chunk_map {
+    //     client.notify_peer_to_provide_chunk(peer, content_chunk_index).await?;
+    // }
 
     client.start_providing(content_hash.clone()).await;
     println!("Uploader Providing...");
@@ -273,7 +331,6 @@ async fn provide_file(
 
     Ok(())
 }
-
 
 #[tauri::command]
 async fn get_file(state: State<'_, AppState>, content_hash: String) -> Result<Vec<u8>, String> {

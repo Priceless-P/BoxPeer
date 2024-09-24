@@ -12,9 +12,12 @@ use libp2p::{
     tcp, yamux, PeerId, StreamProtocol,
 };
 
+use crate::content::cache_chunk_locally;
 use crate::node::load_or_generate_keypair;
+use hex::encode;
 use libp2p::mdns;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::collections::{hash_map, HashMap, HashSet};
 use std::error::Error;
 use std::time::Duration;
@@ -94,6 +97,29 @@ impl Client {
         receiver.await.expect("Sender not to be dropped.")
     }
 
+    pub(crate) async fn send_chunk_to_peer(
+        &mut self,
+        peer: PeerId,
+        content_chunk_index: String,
+        content_chunk_data: String,
+    ) -> Result<Vec<u8>, Box<dyn Error + Send>> {
+        let (sender, receiver) = oneshot::channel();
+        let chunk_data_base64 = encode(&content_chunk_data);
+        let combined_data = json!({
+            "chunk_index": content_chunk_index,
+            "chunk_data": chunk_data_base64,
+        });
+        self.sender
+            .send(Command::SendCacheRequest {
+                peer,
+                content_chunk_data: combined_data.to_string(),
+                sender,
+            })
+            .await
+            .expect("Command receiver not to be dropped.");
+        receiver.await.expect("Sender not to be dropped.")
+    }
+
     /// Get all connected peers
     pub(crate) async fn get_peers_count(&mut self) -> Result<Vec<PeerId>, Box<dyn Error + Send>> {
         let (sender, receiver) = oneshot::channel();
@@ -114,7 +140,6 @@ impl Client {
             .expect("Command receiver not to be dropped.");
         receiver.await.expect("Sender not to be dropped.")
     }
-
 
     /// Dial the given peer at the given address.
     pub(crate) async fn dial(
@@ -147,7 +172,10 @@ impl Client {
         // Wait for the result of the operation
         match receiver.await {
             Ok(_) => {
-                println!("Successfully started providing content: {}", content_chunk_index);
+                println!(
+                    "Successfully started providing content: {}",
+                    content_chunk_index
+                );
             }
             Err(e) => {
                 eprintln!("Failed to start providing content: {}", e);
@@ -221,7 +249,6 @@ impl Client {
 
         Ok(())
     }
-
 
     pub(crate) async fn get_listening_addr(&mut self) -> Result<String, Box<dyn Error + Send>> {
         let (sender, receiver) = oneshot::channel();
@@ -354,6 +381,20 @@ impl EventLoop {
                 request_response::Message::Request {
                     request, channel, ..
                 } => {
+                    if serde_json::from_str(&request.0).expect("Error deserializing") {
+                        let json_value: Value = serde_json::from_str(&request.0).expect("Error deserializing");
+                        let content_chunk_index = json_value["chunk_index"]
+                            .as_str()
+                            .expect("Chunk index to be a string");
+                        let chunk_data_base64 = json_value["chunk_data"]
+                            .as_str()
+                            .expect("Chunk data to be a string");
+
+                        cache_chunk_locally(&content_chunk_index.to_string(), chunk_data_base64.to_string())
+                            .await
+                            .expect("TODO: panic message");
+                    }
+
                     self.event_sender
                         .send(Event::InboundRequest {
                             request: request.0,
@@ -455,16 +496,28 @@ impl EventLoop {
                 }
                 let _ = sender.send(Ok(available_peers));
             }
-            Command::StartProvidingRequest {peer, content_chunk_index} => {
+            Command::SendCacheRequest {
+                peer,
+                content_chunk_data,
+                sender,
+            } => {
+                let request_id = self
+                    .swarm
+                    .behaviour_mut()
+                    .request_response
+                    .send_request(&peer, FileRequest(content_chunk_data));
+                self.pending_request_file.insert(request_id, sender);
+            }
+            Command::StartProvidingRequest {
+                peer,
+                content_chunk_index,
+            } => {
                 self.swarm
                     .behaviour_mut()
                     .request_response
                     .send_request(&peer, FileRequest(content_chunk_index));
 
-                println!(
-                    "Sent request to peer {} to start providing",
-                    peer,
-                );
+                println!("Sent request to peer {} to start providing", peer,);
             }
             Command::Dial {
                 peer_id,
@@ -551,7 +604,6 @@ impl EventLoop {
                     ))));
                 }
             }
-
         }
     }
 }
@@ -607,7 +659,11 @@ enum Command {
     StartProvidingRequest {
         peer: PeerId,
         content_chunk_index: String,
-
+    },
+    SendCacheRequest {
+        peer: PeerId,
+        content_chunk_data: String,
+        sender: oneshot::Sender<Result<Vec<u8>, Box<dyn Error + Send>>>,
     },
 }
 
@@ -623,5 +679,3 @@ pub(crate) enum Event {
 struct FileRequest(String);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct FileResponse(Vec<u8>);
-
-
