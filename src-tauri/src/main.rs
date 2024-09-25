@@ -55,7 +55,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             provide_file,
             get_file,
             load_peer,
-            save_peer
+            save_peer,
+            retrieve_available_peers,
         ])
         .run(tauri::generate_context!())
         .expect("Error while running Box Peer");
@@ -242,6 +243,15 @@ async fn dial_peer(state: State<'_, AppState>, addr: String) -> Result<(), Strin
 
     Ok(())
 }
+
+#[tauri::command]
+async fn retrieve_available_peers(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let mut client = state.network_client.lock().await;
+
+    let peers = client.get_available_peers().await.map_err(|e| e.to_string())?;
+    Ok(peers.into_iter().map(|peer| peer.to_string()).collect()) // Convert PeerId to String if necessary
+}
+
 
 #[tauri::command]
 async fn provide_file(

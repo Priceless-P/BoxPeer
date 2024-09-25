@@ -4,12 +4,6 @@ module BoxPeer_addr::BoxPeer {
     use std::vector;
     use aptos_framework::coin;
     use aptos_framework::aptos_coin::AptosCoin;
-    // use pyth::pyth;
-    // use pyth::price_identifier;
-    //
-    // use pyth::price::{Self, Price};
-
-    const USD_COST_PER_GB: u64 = 50;
 
     const CONTRACT_ADDRESS: address = @0xbaee1a20f32189d921e7ea94c2a886e065fecc69ba6cb953bb55969ae4ae3cd3;
     // Error Codes
@@ -17,14 +11,6 @@ module BoxPeer_addr::BoxPeer {
     const EINSUFFICIENT_FUNDS: u64 = 1001;
     const ENODES_NOT_REGISTERED: u64 = 1002;
     const EINVALID_BILLING_PERIOD: u64 = 1003;
-
-    // Billing Period Constants
-    const BILLING_MONTHLY: u8 = 1;
-    const BILLING_QUARTERLY: u8 = 3;
-    const BILLING_BI_ANNUAL: u8 = 6;
-    const BILLING_YEARLY: u8 = 12;
-
-    const APTOS_USD_PRICE_FEED_IDENTIFIER : vector<u8> = x"44a93dddd8effa54ea51076c4e851b6cbbfd938e82eb90197de38fe8876bb66e";
 
     // Event Definitions
     struct ContentUploaded has store, copy, drop {
@@ -52,13 +38,9 @@ module BoxPeer_addr::BoxPeer {
     struct Content has store {
         owner: address,
         content_hash: string::String,
-        file_size: u64,
-        num_chunks: u64,           // Number of chunks for this content
-        remaining_fee: u64,        // Remaining fee to distribute to nodes
-        payable: bool,             // If consumers must pay to access the content
+        nodes: vector<address>,
+        fee_paid: u64,
         consumer_fee: u64,
-        billing_period: u8,
-        next_billing_month: u64,
     }
 
     // Holds a collection of contents
@@ -83,29 +65,20 @@ module BoxPeer_addr::BoxPeer {
     public entry fun upload_content(
         account: &signer,
         content_hash: string::String,
-        file_size: u64,
-        num_chunks: u64,
-        remaining_fee: u64,
-        payable: bool,
+        nodes: vector<address>,
+        fee_paid: u64,
         consumer_fee: u64,
-        billing_period: u8,
     ) acquires ContentRegistry {
 
         let registry = borrow_global_mut<ContentRegistry>(signer::address_of(account));
-
-
-        coin::transfer<AptosCoin>(account, CONTRACT_ADDRESS, content_fee);
+        coin::transfer<AptosCoin>(account, CONTRACT_ADDRESS, fee_paid);
 
         let new_content = Content {
             owner: signer::address_of(account),
             content_hash,
-            file_size,
-            num_chunks,
-            remaining_fee: content_fee, // Remaining fee starts as the full content fee
-            payable,
+            nodes,
+            fee_paid,
             consumer_fee,
-            billing_period,
-            next_billing_month: 2,
         };
 
         vector::push_back(&mut registry.contents, new_content);
