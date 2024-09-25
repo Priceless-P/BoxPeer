@@ -381,18 +381,17 @@ impl EventLoop {
                 request_response::Message::Request {
                     request, channel, ..
                 } => {
-                    if serde_json::from_str(&request.0).expect("Error deserializing") {
-                        let json_value: Value = serde_json::from_str(&request.0).expect("Error deserializing");
-                        let content_chunk_index = json_value["chunk_index"]
-                            .as_str()
-                            .expect("Chunk index to be a string");
-                        let chunk_data_base64 = json_value["chunk_data"]
-                            .as_str()
-                            .expect("Chunk data to be a string");
+                    let json_value: Value = serde_json::from_str(&request.0)
+                        .expect("Error deserializing");
 
-                        cache_chunk_locally(&content_chunk_index.to_string(), chunk_data_base64.to_string())
-                            .await
-                            .expect("TODO: panic message");
+                    // Check if the JSON contains the expected fields
+                    if let Some(content_chunk_index) = json_value["chunk_index"].as_str() {
+                        if let Some(chunk_data_base64) = json_value["chunk_data"].as_str() {
+                            // Call the async function to cache the chunk data locally
+                            cache_chunk_locally(&content_chunk_index.to_string(), chunk_data_base64.to_string())
+                                .await
+                                .expect("Failed to cache chunk locally");
+                        }
                     }
 
                     self.event_sender
