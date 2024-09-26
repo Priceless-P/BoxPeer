@@ -94,7 +94,7 @@ pub(crate) fn save_peer_info(peer_id: &str, listening_addr: &str) -> io::Result<
         node_type: None, // Default value
     });
 
-    // Update the fields with the new values
+
     peer_info.peer_id = peer_id.to_string();
     peer_info.listening_addr = listening_addr.to_string();
 
@@ -102,7 +102,7 @@ pub(crate) fn save_peer_info(peer_id: &str, listening_addr: &str) -> io::Result<
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
-        .truncate(true) // Truncate (clear) the file if it already exists
+        .truncate(true)
         .open("peer_info.json")?;
     file.write_all(file_content.as_bytes())?;
 

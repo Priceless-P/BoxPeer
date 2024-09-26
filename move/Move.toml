@@ -1,0 +1,13 @@
+[package]
+name = "BoxPeer"
+version = "1.0.0"
+authors = []
+
+[addresses]
+BoxPeer_addr = "001cdc16ec30101c48a9c0f069c7570f6ca50a66a67615676e90490219d77a08"
+
+[dev-addresses]
+BoxPeer_addr = "0x123"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "testnet" }

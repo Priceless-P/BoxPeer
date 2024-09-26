@@ -58,7 +58,7 @@ pub(crate) async fn new(
             mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())
                 .expect("Error"),
         })?
-        .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
+        .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(3600)))
         .build();
 
     swarm
@@ -195,6 +195,7 @@ impl Client {
             .expect("Command receiver not to be dropped.");
         receiver.await.expect("Sender not to be dropped.")
     }
+
 
     /// Request the content of the given file from the given peer.
     pub(crate) async fn request_file(
@@ -523,23 +524,26 @@ impl EventLoop {
                 peer_addr,
                 sender,
             } => {
-                // println!("Peer Id {:?}", peer_id);
-                // println!("Peer Address{:?}", peer_addr);
-                if let hash_map::Entry::Vacant(e) = self.pending_dial.entry(peer_id) {
-                    self.swarm
-                        .behaviour_mut()
-                        .kademlia
-                        .add_address(&peer_id, peer_addr.clone());
-                    match self.swarm.dial(peer_addr.with(Protocol::P2p(peer_id))) {
-                        Ok(()) => {
-                            e.insert(sender);
-                        }
-                        Err(e) => {
-                            let _ = sender.send(Err(Box::new(e)));
-                        }
-                    }
+                if self.swarm.connected_peers().any(|p| p == &peer_id) {
+                    println!("Peer {:?} is already connected", peer_id);
+                    let _ = sender.send(Ok(()));
                 } else {
-                    println!("Already dialing peer.");
+                    if let hash_map::Entry::Vacant(e) = self.pending_dial.entry(peer_id) {
+                        self.swarm
+                            .behaviour_mut()
+                            .kademlia
+                            .add_address(&peer_id, peer_addr.clone());
+                        match self.swarm.dial(peer_addr.with(Protocol::P2p(peer_id))) {
+                            Ok(()) => {
+                                e.insert(sender);
+                            }
+                            Err(e) => {
+                                let _ = sender.send(Err(Box::new(e)));
+                            }
+                        }
+                    } else {
+                        println!("Already dialing peer.");
+                    }
                 }
             }
             Command::StartProviding {

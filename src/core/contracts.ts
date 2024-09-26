@@ -1,21 +1,22 @@
-import { Aptos, AptosConfig, KeylessAccount, Network } from "@aptos-labs/ts-sdk"; // Import types from Aptos SDK
+import { Aptos, AptosConfig, KeylessAccount, Network, U64 } from "@aptos-labs/ts-sdk"; // Import types from Aptos SDK
 
 const aptosConfig = new AptosConfig({ network: Network.TESTNET });
 const aptos = new Aptos(aptosConfig);
 
-const moduleAddress = "0x9e99af6d494ca087085ae7b14c0f422b41b53e62db5b68708bbb2286f8abcb45";
+const moduleAddress = "001cdc16ec30101c48a9c0f069c7570f6ca50a66a67615676e90490219d77a08";
 
 export const upload_content = async (
   account: KeylessAccount,
   content_hash: string,
   nodes: string[],
-  fee_paid: number,
-  consumer_fee: number
+  fee_paid: U64,
+  consumer_fee: U64
 ) => {
   try {
     // Build a raw transaction
+    // console.log(account.accountAddress.bcsToHex().toString())
     const rawTransaction = await aptos.transaction.build.simple({
-      sender: account.accountAddress,
+      sender: account.accountAddress.bcsToHex().toString(),
       data: {
         function: `${moduleAddress}::BoxPeer::upload_content`,
         typeArguments: [],

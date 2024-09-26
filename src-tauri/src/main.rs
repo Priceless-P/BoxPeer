@@ -1,7 +1,6 @@
 mod content;
 mod network;
 mod node;
-
 use crate::content::ContentManager;
 use crate::node::{
     load_or_generate_keypair, load_peer_info, save_node_type, save_peer_info, NodeType,
@@ -45,7 +44,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         content_manager: Arc::new(Mutex::new(content_manager)),
     };
 
-    // Launch the Tauri app
     tauri::Builder::default()
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
@@ -63,10 +61,42 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+#[tauri::command]
+async fn retrieve_and_reassemble_file(
+    state: State<'_, AppState>,
+    content_hash: String,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut file_chunks = Vec::new();
+    let mut client = state.network_client.lock().await;
+
+    let mut index = 0;
+
+    loop {
+        let chunk_index = format!("{}_chunk_{}", content_hash, index);
+
+        let providers = client.get_providers(chunk_index.clone()).await;
+
+        if providers.is_empty() {
+            // If no providers are found for this chunk, assume we've reached the end
+            break;
+        }
+
+        // Choose the first provider and request the file chunk
+        let peer = providers.into_iter().next().unwrap();
+        let chunk_data = client.request_file(peer, chunk_index).await.expect("Error requesting file");
+
+        file_chunks.push(chunk_data);
+
+        index += 1;
+    }
+
+    let reassembled_file = file_chunks.into_iter().flatten().collect::<Vec<u8>>();
+
+    Ok(reassembled_file)
+}
 
 #[tauri::command]
 async fn start_listening(state: State<'_, AppState>) -> Result<String, String> {
-    // Borrow `peer_info` instead of moving it
     let peer_info = load_peer_info();
     let addr = peer_info
         .as_ref()
@@ -83,7 +113,6 @@ async fn start_listening(state: State<'_, AppState>) -> Result<String, String> {
 
     let mut client = state.network_client.lock().await;
 
-    // Clone `addr` before passing it into `start_listening`
     let id = client
         .start_listening(parsed_addr.clone())
         .await
@@ -97,7 +126,6 @@ async fn start_listening(state: State<'_, AppState>) -> Result<String, String> {
         .expect("Error getting listening address");
     let existing_nodes = state.content_manager.lock().await.get_nodes().await?;
     if !existing_nodes.iter().any(|node| *node == peer_id) {
-        // If it doesn't exist, add it
         state.content_manager.lock().await.add_node(peer_id.to_string()).await?;
     }
 
@@ -150,7 +178,6 @@ async fn lock_content(
         )
         .await
         .expect("Error locking content");
-    //advertise in DHT
     client.start_providing(content_hash.clone()).await;
     Ok(())
 }
@@ -166,7 +193,7 @@ async fn unlock_content(state: State<'_, AppState>, content_hash: String) -> Res
         .unlock_content(content_hash.clone(), peer_info.peer_id)
         .await
         .expect("Error locking content");
-    //advertise in DHT
+
     client.start_providing(content_hash.clone()).await;
     Ok(())
 }
@@ -190,7 +217,6 @@ async fn get_peerid_provided_content(state: State<'_, AppState>) -> Result<Vec<S
     let content_manager = state.content_manager.lock().await;
 
     let peer_info = load_peer_info().expect("Peer Id not found");
-    // Fetch provided content hashes for the given peer_id
     match content_manager
         .get_peerid_provided_content(peer_info.peer_id)
         .await
@@ -203,7 +229,7 @@ async fn get_peerid_provided_content(state: State<'_, AppState>) -> Result<Vec<S
 #[tauri::command]
 async fn get_all_locked_content(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     let content_manager = state.content_manager.lock().await;
-    // Fetch locked content hashes for the given peer_id
+
     match content_manager.get_locked_content().await {
         Ok(content_list) => Ok(content_list),
         Err(err) => Err(err.to_string()),
@@ -215,7 +241,7 @@ async fn list_peers(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     let mut client = state.network_client.lock().await;
     match client.get_peers_count().await {
         Ok(peers) => {
-            // Convert Vec<PeerId> to Vec<String>
+
             let peer_strings: Vec<String> =
                 peers.into_iter().map(|peer| peer.to_string()).collect();
             println!("{:?}", peer_strings.clone());
@@ -249,7 +275,7 @@ async fn retrieve_available_peers(state: State<'_, AppState>) -> Result<Vec<Stri
     let mut client = state.network_client.lock().await;
 
     let peers = client.get_available_peers().await.map_err(|e| e.to_string())?;
-    Ok(peers.into_iter().map(|peer| peer.to_string()).collect()) // Convert PeerId to String if necessary
+    Ok(peers.into_iter().map(|peer| peer.to_string()).collect())
 }
 
 
@@ -265,7 +291,6 @@ async fn provide_file(
     let file_size = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
     let mut client = state.network_client.lock().await;
 
-    // Add provided content to the content manager
     state
         .content_manager
         .lock()

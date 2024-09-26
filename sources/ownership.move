@@ -5,7 +5,7 @@ module BoxPeer_addr::BoxPeer {
     use aptos_framework::coin;
     use aptos_framework::aptos_coin::AptosCoin;
 
-    const CONTRACT_ADDRESS: address = @0xbaee1a20f32189d921e7ea94c2a886e065fecc69ba6cb953bb55969ae4ae3cd3;
+    const CONTRACT_ADDRESS: address = @;
     // Error Codes
     const ECONTENT_NOT_FOUND: u64 = 1000;
     const EINSUFFICIENT_FUNDS: u64 = 1001;
@@ -71,7 +71,28 @@ module BoxPeer_addr::BoxPeer {
     ) acquires ContentRegistry {
 
         let registry = borrow_global_mut<ContentRegistry>(signer::address_of(account));
-        coin::transfer<AptosCoin>(account, CONTRACT_ADDRESS, fee_paid);
+        // Check if there are nodes to distribute the fee
+    let num_nodes = vector::length(&nodes);
+    assert!(num_nodes > 0, 100); // Custom error code for no nodes
+
+    // Calculate the fee per node
+    let fee_per_node = fee_paid / (num_nodes as u64);
+    let remainder = fee_paid % (num_nodes as u64);
+
+    // Transfer fee to each node
+    let i = 0;
+    while (i < num_nodes) {
+        let node_address = vector::borrow(&nodes, i);
+        coin::transfer<AptosCoin>(account, *node_address, fee_per_node);
+        i = i + 1;
+    };
+
+    // Optionally, handle remainder by sending it to the first node
+    if (remainder > 0) {
+        let first_node_address = vector::borrow(&nodes, 0);
+        coin::transfer<AptosCoin>(account, *first_node_address, remainder);
+    };
+        //coin::transfer<AptosCoin>(account, CONTRACT_ADDRESS, fee_paid);
 
         let new_content = Content {
             owner: signer::address_of(account),
@@ -91,75 +112,75 @@ module BoxPeer_addr::BoxPeer {
     }
 
     // Verify the owner of a content
-    public entry fun verify_content_ownership(
-        owner: address,
-        content_hash: string::String
-    ) acquires ContentRegistry {
-        let registry = borrow_global_mut<ContentRegistry>(owner);
-
-        let len = vector::length(&registry.contents);
-        let i = 0;
-
-        let  found = false;
-
-        while (i < len) {
-            let content = vector::borrow(&registry.contents, i);
-            if (content.content_hash == content_hash) {
-                found = true;
-                vector::push_back(&mut registry.content_ownership_verified_events, ContentOwnershipVerified {
-                    content_owner: owner,
-                    content_hash,
-                    verified_owner: true,
-                });
-                break
-            };
-            i = i + 1;
-        };
-
-        if (!found) {
-            vector::push_back(&mut registry.content_ownership_verified_events, ContentOwnershipVerified {
-                content_owner: owner,
-                content_hash,
-                verified_owner: false,
-            });
-            assert!(found, ECONTENT_NOT_FOUND);
-        }
-    }
-
-    // Purchase content
-    public entry fun purchase_content(
-        buyer: &signer,
-        content_owner: address,
-        content_hash: string::String
-    ) acquires ContentRegistry {
-        let registry = borrow_global_mut<ContentRegistry>(content_owner);
-        let len = vector::length(&registry.contents);
-        let i = 0;
-
-        let found = false;
-
-        while (i < len) {
-            let content = vector::borrow(&registry.contents, i);
-            if (content.content_hash == content_hash) {
-                assert!(content.cost > 0, EINSUFFICIENT_FUNDS);
-
-                // Transfer coins from buyer to content owner
-                coin::transfer<AptosCoin>(buyer, content_owner, content.cost);
-                found = true;
-
-                let purchase_event = ContentPurchased {
-                    buyer: signer::address_of(buyer),
-                    content_owner,
-                    content_hash,
-                };
-                vector::push_back(&mut registry.content_purchased_events, purchase_event);
-                break
-            };
-            i = i + 1;
-        };
-
-        assert!(found, ECONTENT_NOT_FOUND);
-    }
+    // public entry fun verify_content_ownership(
+    //     owner: address,
+    //     content_hash: string::String
+    // ) acquires ContentRegistry {
+    //     let registry = borrow_global_mut<ContentRegistry>(owner);
+    //
+    //     let len = vector::length(&registry.contents);
+    //     let i = 0;
+    //
+    //     let  found = false;
+    //
+    //     while (i < len) {
+    //         let content = vector::borrow(&registry.contents, i);
+    //         if (content.content_hash == content_hash) {
+    //             found = true;
+    //             vector::push_back(&mut registry.content_ownership_verified_events, ContentOwnershipVerified {
+    //                 content_owner: owner,
+    //                 content_hash,
+    //                 verified_owner: true,
+    //             });
+    //             break
+    //         };
+    //         i = i + 1;
+    //     };
+    //
+    //     if (!found) {
+    //         vector::push_back(&mut registry.content_ownership_verified_events, ContentOwnershipVerified {
+    //             content_owner: owner,
+    //             content_hash,
+    //             verified_owner: false,
+    //         });
+    //         assert!(found, ECONTENT_NOT_FOUND);
+    //     }
+    // }
+    //
+    // // Purchase content
+    // public entry fun purchase_content(
+    //     buyer: &signer,
+    //     content_owner: address,
+    //     content_hash: string::String
+    // ) acquires ContentRegistry {
+    //     let registry = borrow_global_mut<ContentRegistry>(content_owner);
+    //     let len = vector::length(&registry.contents);
+    //     let i = 0;
+    //
+    //     let found = false;
+    //
+    //     while (i < len) {
+    //         let content = vector::borrow(&registry.contents, i);
+    //         if (content.content_hash == content_hash) {
+    //             assert!(content.cost > 0, EINSUFFICIENT_FUNDS);
+    //
+    //             // Transfer coins from buyer to content owner
+    //             coin::transfer<AptosCoin>(buyer, content_owner, content.cost);
+    //             found = true;
+    //
+    //             let purchase_event = ContentPurchased {
+    //                 buyer: signer::address_of(buyer),
+    //                 content_owner,
+    //                 content_hash,
+    //             };
+    //             vector::push_back(&mut registry.content_purchased_events, purchase_event);
+    //             break
+    //         };
+    //         i = i + 1;
+    //     };
+    //
+    //     assert!(found, ECONTENT_NOT_FOUND);
+    // }
 
     // fun fetch_price(receiver : &signer,  vaas : vector<vector<u8>>) : Price {
     //     let coins = coin::withdraw<AptosCoin>(receiver, pyth::get_update_fee(&vaas)); // Get coins to pay for the update

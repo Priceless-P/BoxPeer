@@ -9,6 +9,7 @@ import { useKeylessAccounts } from "../core/useKeylessAccounts.ts";
 import GoogleLogo from "../components/GoogleLogo";
 import { collapseAddress } from "../core/utils";
 import { upload_content } from '../core/contracts.ts';
+import { U64 } from '@aptos-labs/ts-sdk';
 
 
 const { Header, Content } = Layout;
@@ -24,12 +25,12 @@ interface ProvidedFile {
 }
 
 const ProviderDashboard: React.FC = () => {
-    const [listeningAddress, setListeningAddress] = useState<string>('');  // Listening address (from backend)
-    const [peerId, setPeerId] = useState<string>('');  // Peer ID
-    const [peers, setPeers] = useState<Peer[]>([]);  // List of connected peers
+    const [listeningAddress, setListeningAddress] = useState<string>('');
+    const [peerId, setPeerId] = useState<string>('');
+    const [peers, setPeers] = useState<Peer[]>([]);
     const [selectedFile, setSelectedFile] = useState<ProvidedFile | null>(null);
     const [filename, setFilename] = useState<string>('');
-    const [providedFiles, setProvidedFiles] = useState<ProvidedFile[]>([]);  // List of provided files
+    const [providedFiles, setProvidedFiles] = useState<ProvidedFile[]>([]);
     const [consumerFeeInput, setConsumerFeeInput] = useState<string>('');
     const navigate = useNavigate();
 
@@ -76,30 +77,29 @@ const ProviderDashboard: React.FC = () => {
             const fileData = await readBinaryFile(selectedFile.name);
             await invoke('provide_file', { path: selectedFile.name, fileName: filename, contentHash: filename, file_data: fileData });
 
-            // Compute the content hash (for simplicity, using filename as hash here, you should ideally hash file content)
-            const contentHash = filename; // Replace with actual hash logic if needed
+
+            const contentHash = filename;
 
             // Get file size in MB
             const fileSizeMB = selectedFile.size / (1024 * 1024);
 
             // Calculate fee_paid (1 APT per 100MB)
-            const feePaid = Math.ceil(fileSizeMB / 100);
+            const feePaid: U64 = new U64 (Math.ceil(fileSizeMB / 100));
 
             // Get available nodes (peers) from the Tauri backend
-            const nodes = await invoke<string[]>('get_available_peers');
+            let nodes = await invoke<string[]>('retrieve_available_peers');
 
-            // Ensure nodes were fetched correctly
             if (!nodes || nodes.length === 0) {
-                message.error('No available nodes found');
-                return;
+                nodes = ["0x9e99af6d494ca087085ae7b14c0f422b41b53e62db5b68708bbb2286f8abcb45"]
             }
             if (!activeAccount) {
                 message.error('Please connect your account first');
                 return;
             }
 
-            const consumerFee = parseFloat(consumerFeeInput);
-            await upload_content(activeAccount, contentHash, nodes, feePaid, consumerFee);
+            const consumerFee: U64 = new U64(parseInt(consumerFeeInput));
+
+            let p = await upload_content(activeAccount, contentHash, nodes, feePaid, consumerFee);
 
             message.success('File provided and uploaded successfully');
             setProvidedFiles([...providedFiles, selectedFile]);
@@ -109,7 +109,6 @@ const ProviderDashboard: React.FC = () => {
         }
     };
 
-    // Handle file selection
     const handleFileChange = async () => {
         try {
             const selectedFilePath = await open({
@@ -215,14 +214,14 @@ const ProviderDashboard: React.FC = () => {
         <Input
             type="number"
             placeholder="Set consumer fee (APT)"
-            onChange={(e) => setConsumerFeeInput(e.target.value)}  // Store input in state
+            onChange={(e) => setConsumerFeeInput(e.target.value)}
             style={{ marginTop: 16 }}
         />
 
         <Button
             type="primary"
             onClick={provideFile}
-            disabled={!selectedFile || !consumerFeeInput}  // Disable button if no file or fee set
+            disabled={!selectedFile || !consumerFeeInput}
             style={{ marginTop: 16 }}
             icon={<FileOutlined />}
         >
