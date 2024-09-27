@@ -1,4 +1,4 @@
-import { Aptos, AptosConfig, KeylessAccount, Network, U64 } from "@aptos-labs/ts-sdk"; // Import types from Aptos SDK
+import { Aptos, AptosConfig, KeylessAccount, Network, U64 } from "@aptos-labs/ts-sdk";
 
 const aptosConfig = new AptosConfig({ network: Network.TESTNET });
 const aptos = new Aptos(aptosConfig);
@@ -14,7 +14,6 @@ export const upload_content = async (
 ) => {
   try {
     // Build a raw transaction
-    // console.log(account.accountAddress.bcsToHex().toString())
     const rawTransaction = await aptos.transaction.build.simple({
       sender: account.accountAddress.bcsToHex().toString(),
       data: {
@@ -26,7 +25,7 @@ export const upload_content = async (
 
     const committedTxn = await aptos.signAndSubmitTransaction({ signer: account, transaction: rawTransaction });
     await aptos.waitForTransaction({ transactionHash: committedTxn.hash });
-    console.log(`Committed transaction: ${committedTxn.hash}`);
+    return (`Success. Transaction hash ${committedTxn.hash}`);
 
   } catch (error: any) {
     console.error('Error submitting transaction:', error);

@@ -1,3 +1,4 @@
+use base64::decode;
 use futures::{StreamExt, TryFutureExt};
 use libp2p::PeerId;
 use sha2::{Digest, Sha256};
@@ -6,7 +7,6 @@ use sqlx::pool::PoolOptions;
 use sqlx::{query, Row, Sqlite, SqlitePool};
 use std::path::PathBuf;
 use std::str::FromStr;
-use base64::decode;
 use tauri::api::path::{cache_dir, data_dir};
 use tokio::fs;
 use tokio::io::AsyncReadExt;
@@ -174,20 +174,17 @@ impl ContentManager {
         Ok(())
     }
 
-    pub async fn add_node(
-        &self,
-        peer_id: String,
-    ) -> Result<(), String> {
+    pub async fn add_node(&self, peer_id: String) -> Result<(), String> {
         sqlx::query(
             r#"
             INSERT INTO nodes (peer_id)
             VALUES (?)
             "#,
         )
-            .bind(peer_id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| e.to_string())?;
+        .bind(peer_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| e.to_string())?;
 
         Ok(())
     }
@@ -501,7 +498,9 @@ impl ContentManager {
         let mut cached_contents = Vec::new();
 
         // Iterate over all files in the cache directory
-        let mut entries = fs::read_dir(&cache_dir).await.expect("Error reading directory");
+        let mut entries = fs::read_dir(&cache_dir)
+            .await
+            .expect("Error reading directory");
         //let mut entries = tokio::fs::read_dir(&cache_dir).await.expect("Error reading directory");
 
         while let Ok(Some(entry)) = entries.next_entry().await {
@@ -630,7 +629,7 @@ pub(crate) async fn cache_chunk_locally(
 ) -> Result<(), String> {
     let cache_dir = create_cache_directory().await?;
     let chunk_file_path = cache_dir.join(content_chunk_index);
-    let data = decode(chunk_data).expect("Error decdoing chunk data");
+    let data = decode(chunk_data).expect("Error decoding chunk data");
     fs::write(&chunk_file_path, data)
         .await
         .map_err(|e| e.to_string())?;

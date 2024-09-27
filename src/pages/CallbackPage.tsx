@@ -22,17 +22,7 @@ function CallbackPage() {
         async function deriveAccount(idToken: string) {
             try {
                 await switchKeylessAccount(idToken);
-
-                // Fetch peer info and redirect based on node type
-                const peerInfo: PeerInfo = await invoke('load_peer');
-                if (peerInfo && peerInfo.node_type) {
-                    const nodeType = peerInfo.node_type;
-                    if (nodeType === "Provider") {
                         navigate("/dashboard");
-                    } else if (nodeType === "Distributor") {
-                        navigate("/node-dashboard");
-                    }
-                }
             } catch (error) {
                 navigate("/");
                 console.log(error)

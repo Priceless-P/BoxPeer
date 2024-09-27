@@ -1,44 +1,36 @@
-import {Button, Row, Col, Typography, Layout, Radio, Modal,} from 'antd';
+import {Button, Row, Col, Typography, Layout} from 'antd';
 import { GOOGLE_CLIENT_ID } from "../core/constants";
 import useEphemeralKeyPair from "../core/useEphemeralKeyPair";
 import GoogleLogo from "../components/GoogleLogo";
 //import { WalletSelector } from "@aptos-labs/wallet-adapter-ant-design";
 import "@aptos-labs/wallet-adapter-ant-design/dist/index.css";
 import Nav from "./Nav.tsx";
-import { PeerInfo } from '../core/types.ts';
-import {invoke} from '@tauri-apps/api/tauri';
-import {useEffect, useState} from "react";
+import {useEffect} from "react";
+import { useNavigate } from 'react-router-dom';
 
 const { Title, Text } = Typography;
 
 function LoginPage() {
-  const [peerType, setPeerType] = useState<string | null>(null); // Store selected peer type
-  const [showModal, setShowModal] = useState(false);
-
+  const navigate = useNavigate();
   const ephemeralKeyPair = useEphemeralKeyPair();
-useEffect(()=> {
-  async function checkPeerType() {
-    const peerInfo: PeerInfo = await invoke('load_peer');
-    if (!peerInfo || !peerInfo.node_type) {
-      setShowModal(true);
-    } else {
-      setPeerType(peerInfo.node_type)
-      if (peerType) {
-        localStorage.setItem("node_type", peerType);
+
+  useEffect(() => {
+    const keylessAccount = localStorage.getItem('@aptos-connect/keyless-accounts');
+
+    if (keylessAccount) {
+      const accountData = JSON.parse(keylessAccount);
+      const { idToken } = accountData.state.accounts[0];
+      console.log(idToken)
+      const { exp } = JSON.parse(atob(idToken.raw.split('.')[1]));
+      console.log(exp)
+
+      if (exp * 1000 > Date.now()) {
+        window.location.href = `/callback#id_token=${idToken.raw}`
       }
     }
-  } checkPeerType();
-}, [])
+  }, [navigate]);
 
-  const handleSelectPeerType = async (type: string) => {
-    setPeerType(type);
-      try {
-          await invoke('save_peer', { nodeType: type });
-      } catch(error: any) {
-        console.log(error)
-        }
-    setShowModal(false);
-  };
+
 
   const redirectUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
 
@@ -75,25 +67,6 @@ useEffect(()=> {
           </Button>
         </Col>
       </Row>
-
-        {/* Modal to select peer type */}
-        <Modal
-            title="Select Your Peer Type"
-            open={showModal}
-            onCancel={() => setShowModal(false)}
-            footer={[
-              <Button key="close" onClick={() => setShowModal(false)}>
-                Close
-              </Button>
-            ]}
-        >
-          <Radio.Group onChange={(e) => handleSelectPeerType(e.target.value)}>
-            <Radio.Button value="Provider">Provider</Radio.Button>
-            <Radio.Button value="Distributor">Distributor</Radio.Button>
-            {/*<Radio.Button value="Consumer">Consumer</Radio.Button>*/}
-          </Radio.Group>
-        </Modal>
-
       </Layout>
   );
 }

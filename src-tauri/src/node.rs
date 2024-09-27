@@ -94,7 +94,6 @@ pub(crate) fn save_peer_info(peer_id: &str, listening_addr: &str) -> io::Result<
         node_type: None, // Default value
     });
 
-
     peer_info.peer_id = peer_id.to_string();
     peer_info.listening_addr = listening_addr.to_string();
 

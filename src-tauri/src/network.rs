@@ -2,7 +2,7 @@ use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 use futures::StreamExt;
 use std::result::Result;
-
+//use libp2p_webrtc as webrtc;
 use libp2p::multiaddr::Protocol;
 use libp2p::{
     core::Multiaddr,
@@ -58,7 +58,7 @@ pub(crate) async fn new(
             mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())
                 .expect("Error"),
         })?
-        .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(3600)))
+        .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(36000)))
         .build();
 
     swarm
@@ -196,7 +196,6 @@ impl Client {
         receiver.await.expect("Sender not to be dropped.")
     }
 
-
     /// Request the content of the given file from the given peer.
     pub(crate) async fn request_file(
         &mut self,
@@ -274,7 +273,7 @@ pub(crate) struct EventLoop {
 }
 
 impl EventLoop {
-    fn new(
+    pub(crate) fn new(
         swarm: Swarm<Behaviour>,
         command_receiver: mpsc::Receiver<Command>,
         event_sender: mpsc::Sender<Event>,
@@ -382,16 +381,19 @@ impl EventLoop {
                 request_response::Message::Request {
                     request, channel, ..
                 } => {
-                    let json_value: Value = serde_json::from_str(&request.0)
-                        .expect("Error deserializing");
+                    let json_value: Value =
+                        serde_json::from_str(&request.0).expect("Error deserializing");
 
                     // Check if the JSON contains the expected fields
                     if let Some(content_chunk_index) = json_value["chunk_index"].as_str() {
                         if let Some(chunk_data_base64) = json_value["chunk_data"].as_str() {
                             // Call the async function to cache the chunk data locally
-                            cache_chunk_locally(&content_chunk_index.to_string(), chunk_data_base64.to_string())
-                                .await
-                                .expect("Failed to cache chunk locally");
+                            cache_chunk_locally(
+                                &content_chunk_index.to_string(),
+                                chunk_data_base64.to_string(),
+                            )
+                            .await
+                            .expect("Failed to cache chunk locally");
                         }
                     }
 

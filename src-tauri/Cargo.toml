@@ -19,10 +19,19 @@ clap = { version = "4.5.6", features = ["derive"] }
 lazy_static = {version = "1.4"}
 #rusqlite = { version = "0.32.0", features = ["bundled"] }
 futures = { version= "0.3" }
+libp2p-webrtc  = { version= " 0.3.0"}
 libp2p = { version = "0.54.1", features = ["mdns", "tokio", "gossipsub", "cbor", "dns", "kad", "noise", "macros", "request-response", "tcp", "websocket", "yamux"] }
-libp2p-gossipsub = { version = "0.47.0" }
+libp2p-bitswap = { version = "0.25.1" }
+#multiaddr = "*"
 tracing = { version = "0.1.40" }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+blockstore = "0.7"
+libipld = "0.16.0"
+libp2p-core = "0.42.0"
+multihash-codetable = {version = "0.1", features = ["sha2"] }
+bytes = "1"
+beetswap = "=0.4.0"
+cid = "0.11"
 void = "1.0.2"
 serde_json = "1"
 devtools = "0.3.3"
@@ -32,6 +41,7 @@ sqlx = { version = "0.8.1", features = ["sqlite", "runtime-tokio-native-tls", "m
 hex = "0.4.3"
 base64 = "0.22.1"
 tokio-stream = "0.1.16"
+anyhow = "1.0.86"
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
