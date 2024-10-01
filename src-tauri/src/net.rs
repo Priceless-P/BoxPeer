@@ -26,7 +26,8 @@ use libp2p::{
     kad::{store::MemoryStore, Record},
 };
 use libp2p_bitswap::{BitswapStore};
-use libp2p::request_response::OutboundRequestId;
+use libp2p_kad::RecordKey;
+use tauri::api::path::cache_dir;
 use tracing::{debug, info, error};
 use crate::node::load_or_generate_keypair;
 
@@ -77,7 +78,6 @@ impl P2PCDNClient {
         let blockstore = Arc::new(InMemoryBlockstore::new());
 
         let mut swarm = SwarmBuilder::with_existing_identity(id_keys)
-            // Continue with your swarm initialization
             .with_tokio()
             .with_tcp(
                 tcp::Config::default(),
@@ -135,7 +135,6 @@ impl P2PCDNClient {
             sender,
         }).await?;
 
-        // Wait for the result of the upload operation
         let cid = receiver.await??;
         Ok(cid)
     }
@@ -221,8 +220,28 @@ impl EventLoop {
             SwarmEvent::Behaviour(BehaviourEvent::Bitswap(bitswap)) => {
                 match bitswap {
                     beetswap::Event::GetQueryResponse { query_id, data } => {
+                        println!("GetQueryResponse triggered for query_id: {:?}", query_id);
                         if let Some(cid) = self.queries.get(&query_id) {
                             info!("Received response for CID {:?}: {:?}", cid, data);
+
+                            if let Some(cache_path) = cache_dir() {
+                                let mut file_path = PathBuf::from(cache_path);
+                                file_path.push("Boxpeer");
+                                file_path.push(cid.to_string());
+                                println!("{:?}", &file_path);
+
+                                if let Err(e) = fs::create_dir_all(&file_path.parent().unwrap()) {
+                                    println!("Failed to create cache directory: {:?}", e);
+                                }
+
+                                if let Err(e) = fs::write(&file_path, data) {
+                                    println!("Failed to save the file: {:?}", e);
+                                } else {
+                                    println!("File saved to: {:?}", file_path);
+                                }
+                            } else {
+                                println!("Could not find cache dir");
+                            }
                         }
                     },
                     beetswap::Event::GetQueryError { query_id, error } => {
@@ -232,47 +251,96 @@ impl EventLoop {
                     },
                 }
             },
-            // SwarmEvent::Behaviour(kad::Event::RoutingUpdated { peer, .. }) => {
-            //     info!("Discovered peer: {:?}", peer);
-            // },
-            SwarmEvent::Behaviour(BehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
-                for (peer_id, multiaddr) in list {
-                    self.swarm
-                        .behaviour_mut()
-                        .kademlia
-                        .add_address(&peer_id, multiaddr);
+            SwarmEvent::Behaviour(BehaviourEvent::Mdns(mdns_event)) => {
+                if let mdns::Event::Discovered(peers) = mdns_event {
+                    for (peer_id, multiaddr) in peers {
+                        self.swarm
+                            .behaviour_mut()
+                            .kademlia
+                            .add_address(&peer_id, multiaddr.clone());
+                        println!("Discovered Peer: {:?}", multiaddr)
+                    }
                 }
             },
+            // SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad_event)) => {
+            //     if let kad::Event::OutboundQueryProgressed { id, result, .. } = kad_event {
+            //         if let kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { providers, .. })) = result {
+            //             if let Some(mut cid) = self.queries.get(&id) {
+            //                 if providers.is_empty() {
+            //                     println!("No providers found for CID: {:?}", cid);
+            //                 }
+            //                 for (peer) in providers {
+            //                     let query_id = self.swarm.behaviour_mut().kademlia.get_closest_peers(peer);
+            //                     println!("Found provider: {:?}", peer);
+            //
+            //                     println!("Requesting file with CID: {:?}", cid);
+            //
+            //                     // Use Bitswap to request the file from the provider.
+            //                     let query_id = self.swarm.behaviour_mut().bitswap.get(&(*cid));
+            //                     println!("Here query: {:?}", query_id);
+            //                     self.queries.insert(query_id, *cid);
+            //                 }
+            //             }
+            //         }
+            //     }
+            // },
             _ => {}
         }
     }
 
+
     async fn handle_command(&mut self, command: Command) {
         match command {
             Command::UploadFile { file_path, sender } => {
-                let blockstore: Arc<InMemoryBlockstore<MAX_MULTIHASH_SIZE>>= Arc::new(InMemoryBlockstore::new());
+                let blockstore: Arc<InMemoryBlockstore<MAX_MULTIHASH_SIZE>> = Arc::new(InMemoryBlockstore::new());
 
                 // Read the file as binary data
-                let file_data = fs::read(&file_path).expect("Error reading file");
+                let file_data = match fs::read(&file_path) {
+                    Ok(data) => data,
+                    Err(e) => {
+                        println!("Failed to read file from {:?}: {:?}", file_path, e);
+                        let _ = sender.send(Err(anyhow::anyhow!("File read error: {:?}", e)));
+                        return;
+                    }
+                };
+
+                // Create the file block
                 let block = FileBlock(file_data);
 
-                let cid = block.cid().expect("Error getting cid");
-                info!("Uploading file with CID: {}", cid);
+                // Generate the CID
+                let cid = match block.cid() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        println!("Failed to generate CID: {:?}", e);
+                        let _ = sender.send(Err(anyhow::anyhow!("CID generation error: {:?}", e)));
+                        return;
+                    }
+                };
 
-                // Store the file block in the Bitswap blockstore
-                blockstore.put_keyed(&cid, block.data()).await.expect("Error uploading file");
-                //Ok(cid)
+                println!("Uploading file with CID: {}", cid);
+                if let Err(e) = blockstore.put_keyed(&cid, block.data()).await {
+                    println!("Failed to store block: {:?}", e);
+                    let _ = sender.send(Err(anyhow::anyhow!("Block storage error: {:?}", e)));
+                    return;
+                }
+
+                let cid_key = RecordKey::new(&cid.to_bytes());
+                self.swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .start_providing(cid_key)
+                    .expect("Failed to start providing the CID");
+
+                // Send the CID as the result of the upload
                 let _ = sender.send(Ok(cid));
             },
             Command::RequestFile { cid, save_path, sender } => {
-                let mut queries = HashMap::new();
-                // Use Kademlia DHT to find providers of the content
-                // let p = self.swarm.behaviour_mut().kademlia.get_providers(cid.to_string().into());
+                //let cid_key = RecordKey::new(&cid.to_bytes());
+                let query_id = self.swarm.behaviour_mut().bitswap.get(&cid);
+                println!("Bitswap query ID: {:?} for CID: {:?}", query_id, cid);
 
-                // Simultaneously request content via Bitswap
-                let query_id =self.swarm.behaviour_mut().bitswap.get(&cid);
-                 queries.insert(query_id, cid).unwrap();
-                info!("requested cid {cid}: {query_id:?}");
+                self.queries.insert(query_id, cid);
+
                 let _ = sender.send(Ok(()));
             },
             Command::StartListening { addr, sender } => {
@@ -314,11 +382,10 @@ impl EventLoop {
 
     pub(crate) async fn run(mut self) {
         loop {
-            tokio::select! {
+            select! {
                 event = self.swarm.select_next_some() => self.handle_event(event).await,
                 command = self.command_receiver.next() => match command {
                     Some(c) => self.handle_command(c).await,
-                    // Command channel closed, thus shutting down the network event loop.
                     None=>  return,
                 },
             }

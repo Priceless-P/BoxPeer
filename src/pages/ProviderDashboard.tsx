@@ -35,6 +35,7 @@ const ProviderDashboard: React.FC = () => {
     const [providedFiles, setProvidedFiles] = useState<ProvidedFile[]>([]);
     const [consumerFeeInput, setConsumerFeeInput] = useState<number>(0);
     const [isPaid, setIsPaid] = useState(false);
+    const [fileCid, setFileCid] = useState<string>('')
     const navigate = useNavigate();
 
     const { activeAccount, disconnectKeylessAccount } = useKeylessAccounts();
@@ -80,6 +81,45 @@ const ProviderDashboard: React.FC = () => {
         }
     };
 
+    const requestFile = async (cid: string) => {
+        if (!cid) {
+            message.error('Please enter a valid file CID');
+            return;
+        }
+
+        try {
+            // Request the file data from the backend
+            const fileData = await invoke<string>('request_file', { cid, savePath: '/path/to' });
+            console.log("FileData",fileData)
+            // Create a Blob to handle binary data
+            const blob = new Blob([fileData], { type: 'application/octet-stream' });
+
+            // Create a link element to download the file
+            const downloadLink = document.createElement('a');
+            downloadLink.href = URL.createObjectURL(blob);
+            downloadLink.download = `downloaded_file_${cid}`; // Name the file using the CID
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+
+            // Clean up the link after download
+            document.body.removeChild(downloadLink);
+
+            message.success('File downloaded successfully');
+        } catch (error: any) {
+            console.error(error);
+            message.error('Failed to request file: ' + error.message);
+        }
+    };
+
+    const _requestFile = async (cid: string) => {
+        try {
+            const fileData = await invoke('get_file_from_cache', { cid });
+            // Handle the file data (e.g., show image or download)
+          } catch (error) {
+            console.error('Failed to retrieve file:', error);
+          }
+    }
+
     // Provide a file to the network
     const provideFile = async () => {
         if (!selectedFile) {
@@ -93,7 +133,7 @@ const ProviderDashboard: React.FC = () => {
             const contentHash = filename;
             const fileSizeMB = selectedFile.size / (1024 * 1024);
             let p = await invoke('upload_file', { filePath: selectedFile.name, file_data: fileData });
-            console.log(p);
+            console.log("Here",p);
             const feePaid: U64 = new U64(Math.ceil(fileSizeMB / 100));
 
             let nodes = ["0x9e99af6d494ca087085ae7b14c0f422b41b53e62db5b68708bbb2286f8abcb45"];
@@ -211,10 +251,7 @@ const ProviderDashboard: React.FC = () => {
                     </Col>
                     <Col span={8}>
                         <div style={columnStyle}>
-                            <Statistic title="Connected Peers" value={peers.length} />
-                            <Button type="primary" onClick={fetchPeers} style={{ marginTop: 16 }}>
-                                Get Peers
-                            </Button>
+                            <Statistic title="Wallet Balance" value={accountBalance} />
                         </div>
                     </Col>
                     <Col span={8}>
@@ -237,7 +274,10 @@ const ProviderDashboard: React.FC = () => {
                     </Col>
                     <Col span={8}>
                         <div style={columnStyle}>
-                            <Statistic title="Wallet Balance" value={accountBalance} />
+                            <Statistic title="Connected Peers" value={peers.length} />
+                            <Button type="primary" onClick={fetchPeers} style={{ marginTop: 16 }}>
+                                Get Peers
+                            </Button>
                         </div>
                     </Col>
                 </Row>
@@ -303,7 +343,25 @@ const ProviderDashboard: React.FC = () => {
                                 <Table dataSource={providedFiles} columns={columns} pagination={false} />
                             </Col>
                         </Row>
+                        <Row gutter={16} style={{ marginTop: 30 }}>
+    <Col span={24}>
+        <Typography.Title level={4}>Request a File</Typography.Title>
+        <Input
+            placeholder="Enter File CID"
+            onChange={(e) => setFileCid(e.target.value)} // Use state to track the CID input
+            style={{ marginBottom: 16 }}
+        />
+        <Button
+            type="primary"
+            onClick={() => requestFile(fileCid)}
+            disabled={!fileCid}
+        >
+            Get File
+        </Button>
+    </Col>
+</Row>
                     </Content>
+
                 </Layout>
             </Layout>
         </Layout>
