@@ -7,6 +7,8 @@ use cid::Cid;
 use futures::channel::{mpsc, oneshot};
 use futures::{SinkExt, Stream, StreamExt};
 use libp2p::kad::store::MemoryStore;
+use libp2p::multiaddr::Protocol;
+use std::net::Ipv4Addr;
 use libp2p::{
     identity, kad, mdns, noise,
     swarm::{NetworkBehaviour, SwarmEvent},
@@ -76,7 +78,7 @@ impl P2PCDNClient {
         let db = sled::open(path)?;
         let blockstore = Arc::new(SledBlockstore::new(db).await.expect("Err"));
 
-        let swarm = SwarmBuilder::with_existing_identity(id_keys)
+        let mut swarm = SwarmBuilder::with_existing_identity(id_keys)
             .with_tokio()
             .with_tcp(
                 tcp::Config::default(),
@@ -106,6 +108,12 @@ impl P2PCDNClient {
 
         let (command_sender, command_receiver) = mpsc::channel(0);
         let (event_sender, event_receiver) = mpsc::channel(0);
+        let address_webrtc = Multiaddr::from(Ipv4Addr::new(127, 0, 0, 1))
+        .with(Protocol::Udp(9090))
+        .with(Protocol::WebRTCDirect);
+    let tcp_listen_addr: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse()?;
+    swarm.listen_on(tcp_listen_addr)?;
+        swarm.listen_on(address_webrtc);
 
         Ok((
             P2PCDNClient {
@@ -276,13 +284,10 @@ impl EventLoop {
     ) -> Result<(), anyhow::Error> {
         match event {
             SwarmEvent::Behaviour(BehaviourEvent::Bitswap(bitswap)) => {
-                println!("Here");
                 match bitswap {
                     beetswap::Event::GetQueryResponse { query_id, data } => {
-                         self.queries.get(&query_id);
-
+                        self.queries.get(&query_id);
                         if let Some(sender) = self.pending_requests.remove(&query_id) {
-                            // Send the received file data back to the original requester
                             sender
                                 .send(Ok(data))
                                 .map_err(|e| anyhow!("Failed to send file data: {:?}", e))?;
@@ -304,26 +309,65 @@ impl EventLoop {
                             .behaviour_mut()
                             .kademlia
                             .add_address(&peer_id, multiaddr.clone());
-                        println!("Discovered Peer: {:?}", multiaddr);
+                        println!("Discovered Peer: {:?}", &multiaddr);
                     }
                 }
             }
             SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad_event)) => {
-                if let kad::Event::OutboundQueryProgressed { id, result, .. } = kad_event {
-                    if let kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { providers, .. })) = result {
-                        if let Some(sender) = self.pending_get_providers.remove(&id) {
-                            sender.send(providers).expect("Receiver not to be dropped");
-
-                    self.swarm
-                        .behaviour_mut()
-                        .kademlia
-                        .query_mut(&id)
-                        .unwrap()
-                        .finish();
+                match kad_event {
+                    // Handle Kademlia routing update
+                    kad::Event::RoutingUpdated { peer, addresses, .. } => {
+                        if let address = addresses.first() {
+                            //println!("Protocol {:?}", self.swarm.protocol_names());
+                            println!("Discovered peer via Kademlia: {:?} at {:?}", peer, address);
+                            if self.swarm.dial(address.clone()).is_ok() {
+                                println!("Dialing discovered peer: {:?}", peer);
+                            } else {
+                                println!("Failed to dial peer: {:?}", peer);
+                            }
                         }
                     }
+                    // Handle Kademlia outbound query progression
+                    kad::Event::OutboundQueryProgressed { id, result, .. } => {
+                        if let kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { providers, .. })) = result {
+                            if let Some(sender) = self.pending_get_providers.remove(&id) {
+                                sender.send(providers).expect("Receiver not to be dropped");
+                                self.swarm
+                                    .behaviour_mut()
+                                    .kademlia
+                                    .query_mut(&id)
+                                    .unwrap()
+                                    .finish();
+                            }
+                        }
+                    }
+                    _ => {
+                        println!("Other Kademlia event: {:?}", kad_event);
+                    }
                 }
-            },
+            }
+            // SwarmEvent::OutgoingConnectionError { peer_id, error, connection_id, .. } => {
+            //     if let Some(peer) = peer_id {
+            //         // Retry using TCP after WebRTC timeout or failure
+            //         if let connection_id = connection_id {
+            //             if let webrtc::tokio::Error::_ = error {
+            //                 // Retry TCP dial after WebRTC failure
+            //                 if self.swarm.dial(peer.clone()).is_ok() {
+            //                     eprintln!("Attempting TCP connection for peer: {:?}", peer);
+            //                 } else {
+            //                     eprintln!("Failed to dial peer {:?} with TCP as well.", peer);
+            //                 }
+            //             } else {
+            //                 eprintln!("Other connection error: {:?}", error);
+            //             }
+            //         }
+            //     }
+            // }
+            SwarmEvent::Dialing {
+                peer_id: Some(peer_id),
+                ..
+            } => eprintln!("Dialing {peer_id}"),
+
             _ => {
                 println!("Did not match any specific event: {:?}", event);
             }
@@ -331,6 +375,7 @@ impl EventLoop {
 
         Ok(())
     }
+
 
     async fn handle_command(&mut self, command: Command) -> Result<(), anyhow::Error> {
         match command {
