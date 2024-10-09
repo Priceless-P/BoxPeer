@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Layout, Input, Row, Col, Card, Button, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
-
 import Nav from './Nav';
 import Footer_ from './Footer';
 
@@ -18,16 +17,34 @@ interface ContentItem {
   description: string;
 }
 
-const sampleContent: ContentItem[] = [
-  { id: 1, title: "Video Tutorial on Aptos", type: "Video", size: "500MB", cost: "5 APT", description: "Learn the basics of Aptos blockchain." },
-  { id: 2, title: "Aptos Whitepaper", type: "Document", size: "2MB", cost: "Free", description: "Detailed documentation on Aptos blockchain." },
-];
-
 const Contents: React.FC = () => {
+  const [contents, setContents] = useState<ContentItem[]>([]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchContents = () => {
+      const socket = new WebSocket("ws://127.0.0.1:8080");
+
+      socket.onopen = () => {
+        socket.send("get_all_contents");
+      };
+
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        setContents(data);
+      };
+
+      return () => {
+        socket.close();
+      };
+    };
+
+    fetchContents();
+  }, []);
 
   const handleSearch = (value: string) => {
     console.log('Search value:', value);
+    // Implement search functionality if needed
   };
 
   const handleContentSelect = (content: ContentItem) => {
@@ -44,7 +61,7 @@ const Contents: React.FC = () => {
 
       <Content style={{ padding: '20px 50px' }}>
         <Row gutter={[16, 16]}>
-          {sampleContent.map((item) => (
+          {contents.map((item) => (
             <Col span={8} key={item.id}>
               <Card
                 hoverable
@@ -53,6 +70,14 @@ const Contents: React.FC = () => {
                   <Button type="primary" onClick={() => handleContentSelect(item)}>View Details</Button>,
                 ]}
               >
+                {item.type.startsWith("Video") ? (
+                  <video width="100%" controls>
+                    <source src={`path_to_your_video/${item.id}.mp4`} type="video/mp4" />
+                    Your browser does not support the video tag.
+                  </video>
+                ) : item.type.startsWith("Image") ? (
+                  <img src={`path_to_your_images/${item.id}.jpg`} alt={item.title} width="100%" />
+                ) : null}
                 <Text>Type: {item.type}</Text><br />
                 <Text>Size: {item.size}</Text><br />
                 <Text>Cost: {item.cost}</Text>

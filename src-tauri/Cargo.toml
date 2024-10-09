@@ -15,21 +15,24 @@ tauri = { version = "1", features = [ "dialog-all", "fs-all", "shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
 libp2p-kad = {version = "0.46" }
 tokio = { version = "1", features = ["full"] }
-clap = { version = "4.5.6", features = ["derive"] }
 lazy_static = {version = "1.4"}
-#rusqlite = { version = "0.32.0", features = ["bundled"] }
 futures = { version= "0.3" }
 libp2p = { version = "0.54.1", features = ["mdns", "tokio", "gossipsub", "cbor", "dns", "kad", "noise", "macros", "request-response", "tcp", "websocket", "yamux"] }
 libp2p-bitswap = { version = "0.25.1" }
-#multiaddr = "*"
 tracing = { version = "0.1.40" }
+libp2p-webrtc = {version = "0.8.0-alpha", features= ["tokio"] }
+libp2p-webrtc-websys = "0.4.0-alpha"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-blockstore = "0.7"
+blockstore = {version = "0.7", features = ["sled"] }
+sled = "0.34"
+libp2p-identity = "0.2.9"
 libipld = "0.16.0"
 libp2p-core = "0.42.0"
+rand = "0.8.5"
 multihash-codetable = {version = "0.1", features = ["sha2"] }
 bytes = "1"
 beetswap = "=0.4.0"
+subtle = "2.2.1"
 cid = "0.11"
 void = "1.0.2"
 serde_json = "1"
@@ -41,6 +44,12 @@ hex = "0.4.3"
 base64 = "0.22.1"
 tokio-stream = "0.1.16"
 anyhow = "1.0.86"
+reqwest = { version = "0.12.8", features = ["json"] }
+dirs = "5.0.1"
+
+# [patch.crates-io]
+# subtle = "=2.5.0"
+
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!

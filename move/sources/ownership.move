@@ -6,25 +6,26 @@ module BoxPeer_addr::BoxPeer {
     use aptos_framework::event;
     use aptos_framework::aptos_coin::AptosCoin;
 
-    const CONTRACT_ADDRESS: address = @0x001cdc16ec30101c48a9c0f069c7570f6ca50a66a67615676e90490219d77a08;
-    
+    const CONTRACT_ADDRESS: address = @0xbca47e0e304b5dcd2b54c9d6683d1cd11010d6453798da34acd1ae5065c4ff5f;
+
     // Error Codes
     const ECONTENT_NOT_FOUND: u64 = 1000;
     const EINSUFFICIENT_FUNDS: u64 = 1001;
     const ENODES_NOT_REGISTERED: u64 = 1002;
-    
+
     struct NodeRegistered has store, copy, drop {
         node_address: address,
     }
 
     // Holds content metadata and ownership
     #[event]
-    struct Content has store {
+    struct Content has store, drop {
         owner: address,
-        content_hash: string::String,
+        cid: string::String,
         nodes: vector<address>,
         fee_paid: u64,
         consumer_fee: u64,
+        file_type: string::String,
     }
 
     // Holds a collection of contents
@@ -43,18 +44,27 @@ module BoxPeer_addr::BoxPeer {
     // Upload Content
     public entry fun upload_content(
         account: &signer,
-        content_hash: string::String,
+        cid: string::String,
         nodes: vector<address>,
         fee_paid: u64,
         consumer_fee: u64,
+        file_type: string::String,
     ) acquires ContentRegistry {
+
+    if (!exists<ContentRegistry>(signer::address_of(account))) {
+        init_registry(account);
+    };
 
         let registry = borrow_global_mut<ContentRegistry>(signer::address_of(account));
         // Check if there are nodes to distribute the fee
     let num_nodes = vector::length(&nodes);
     assert!(num_nodes > 0, ENODES_NOT_REGISTERED);
 
-    // Calculate the fee per node
+        let balance = coin::balance<AptosCoin>(signer::address_of(account));
+        assert!(balance >= fee_paid, EINSUFFICIENT_FUNDS);
+
+
+        // Calculate the fee per node
     let fee_per_node = fee_paid / num_nodes;
     let remainder = fee_paid % num_nodes;
 
@@ -74,12 +84,25 @@ module BoxPeer_addr::BoxPeer {
 
         let new_content = Content {
             owner: signer::address_of(account),
-            content_hash,
+            cid,
             nodes,
             fee_paid,
             consumer_fee,
+            file_type,
+        };
+        
+
+        vector::push_back(&mut registry.contents,new_content);
+        
+        let event =  Content {
+            owner: signer::address_of(account),
+            cid,
+            nodes,
+            fee_paid,
+            consumer_fee,
+            file_type,
         };
 
-        vector::push_back(&mut registry.contents, new_content);
+        event::emit(event);
     }
 }

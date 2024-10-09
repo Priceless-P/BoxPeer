@@ -9,6 +9,7 @@ lerna-debug.log*
 sqlite*
 peer*
 .aptos/
+.env
 
 node_modules/
 dist
