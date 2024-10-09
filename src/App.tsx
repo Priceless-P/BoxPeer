@@ -6,7 +6,6 @@ import Contents from './pages/Content';
 import ContentDetails from './pages/ContentDetails';
 import ProviderDashboard from './pages/ProviderDashboard';
 import 'antd/dist/reset.css';
-import PeerDashboard from './pages/PeerDashboard';
 import CallbackPage from "./pages/CallbackPage";
 import LoginPage from "./pages/LoginPage";
 
@@ -27,13 +26,13 @@ const App: React.FC = () => {
             <div className="App">
                 <Router>
                     <Routes>
-                        <Route path="/" element={<Home />} />
-                        <Route path="/login" element={<LoginPage />} />
+                        <Route path="/home" element={<Home />} />
+                        <Route path="/" element={<LoginPage />} />
                         <Route path="/callback" element={<CallbackPage />} />
                         <Route path="/contents" element={<Contents />} />
                         <Route path="/dashboard" element={<ProviderDashboard />} />
                         <Route path="/content/:id" element={<ContentDetails />} />
-                        <Route path="/node-dashboard" element={<PeerDashboard />} />
+                        {/* <Route path="/node-dashboard" element={<PeerDashboard />} /> */}
                     </Routes>
                 </Router>
             </div>
