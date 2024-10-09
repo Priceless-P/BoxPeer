@@ -310,6 +310,12 @@ impl EventLoop {
                             .kademlia
                             .add_address(&peer_id, multiaddr.clone());
                         println!("Discovered Peer: {:?}", &multiaddr);
+
+                        if self.swarm.dial(multiaddr.clone()).is_ok() {
+                            println!("Dialing mDNS-discovered peer: {:?}", peer_id);
+                        } else {
+                            println!("Failed to dial mDNS peer: {:?}", peer_id);
+                        }
                     }
                 }
             }
@@ -320,10 +326,12 @@ impl EventLoop {
                         if let address = addresses.first() {
                             //println!("Protocol {:?}", self.swarm.protocol_names());
                             println!("Discovered peer via Kademlia: {:?} at {:?}", peer, address);
-                            if self.swarm.dial(address.clone()).is_ok() {
-                                println!("Dialing discovered peer: {:?}", peer);
-                            } else {
-                                println!("Failed to dial peer: {:?}", peer);
+
+                            let address_tcp : Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().expect("Error");
+                            if self.swarm.dial(address_tcp).is_ok(){
+                                println!("Dialing discovered peer TCP: {:?}", peer);
+                            } else  {
+                                println!("Eror Dialing peer: {:?}", peer);
                             }
                         }
                     }
