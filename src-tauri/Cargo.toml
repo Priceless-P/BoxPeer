@@ -20,7 +20,7 @@ futures = { version= "0.3" }
 libp2p = { version = "0.54.1", features = ["mdns", "tokio", "gossipsub", "cbor", "dns", "kad", "noise", "macros", "request-response", "tcp", "websocket", "yamux"] }
 libp2p-bitswap = { version = "0.25.1" }
 tracing = { version = "0.1.40" }
-libp2p-webrtc = {version = "0.8.0-alpha", features= ["tokio"] }
+libp2p-webrtc = {version = "0.8.0-alpha", features= ["tokio", "pem"] }
 libp2p-webrtc-websys = "0.4.0-alpha"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 blockstore = {version = "0.7", features = ["sled"] }
