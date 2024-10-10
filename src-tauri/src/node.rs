@@ -1,12 +1,12 @@
-use std::path::Path;
 use libp2p::identity;
 use libp2p_webrtc::tokio::Certificate;
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
-use tauri::api::dir;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
+use std::path::Path;
 use std::path::PathBuf;
+use tauri::api::dir;
 use tauri::api::path::cache_dir;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -70,8 +70,8 @@ pub async fn boxpeer_dir() -> Result<String, String> {
 }
 
 async fn generate_and_save_certificate() -> std::io::Result<Certificate> {
- let dir = boxpeer_dir().await.expect("Error");
- let mut cert_path = PathBuf::from(dir);
+    let dir = boxpeer_dir().await.expect("Error");
+    let mut cert_path = PathBuf::from(dir);
     cert_path.push("cert.pem");
     let cert = Certificate::generate(&mut thread_rng()).unwrap();
     let pem_str = cert.serialize_pem();
@@ -92,9 +92,9 @@ pub async fn load_or_generate_certificate() -> std::io::Result<Certificate> {
         file.read_to_string(&mut pem_str)?;
 
         // Recreate the certificate from the DER format
-        Certificate::from_pem(&pem_str).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        Certificate::from_pem(&pem_str)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     } else {
         generate_and_save_certificate().await
     }
 }
-

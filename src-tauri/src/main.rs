@@ -5,16 +5,16 @@
 
 mod net;
 mod node;
-use std::net::Ipv4Addr;
-use tauri::{async_runtime::spawn, Manager, State};
-use libp2p::multiaddr::{Multiaddr, Protocol};
-use std::path::PathBuf;
-use std::pin::Pin;
-use std::sync::Arc;
 use crate::net::P2PCDNClient;
 use anyhow::Result;
 use cid::Cid;
+use libp2p::multiaddr::{Multiaddr, Protocol};
 use libp2p_core::PeerId;
+use std::net::Ipv4Addr;
+use std::path::PathBuf;
+use std::pin::Pin;
+use std::sync::Arc;
+use tauri::{async_runtime::spawn, Manager, State};
 use tokio::sync::Mutex as AsyncMutex;
 
 struct AppState {
@@ -24,7 +24,7 @@ struct AppState {
 
 #[tauri::command]
 async fn start_listening(state: State<'_, AppState>) -> Result<String, String> {
-    let address_webrtc : Multiaddr = "/ip4/0.0.0.0/tcp/9091".parse().expect("Error");
+    let address_webrtc: Multiaddr = "/ip4/127.0.0.1/tcp/9091".parse().expect("Error");
 
     let mut client = state.client.lock().await;
 

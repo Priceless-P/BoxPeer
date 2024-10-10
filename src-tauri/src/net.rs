@@ -1,4 +1,5 @@
-use crate::node::{load_or_generate_keypair, load_or_generate_certificate};
+use crate::node::boxpeer_dir;
+use crate::node::{load_or_generate_certificate, load_or_generate_keypair};
 use anyhow::{anyhow, Result};
 use beetswap;
 use blockstore::block::CidError;
@@ -8,28 +9,27 @@ use futures::channel::{mpsc, oneshot};
 use futures::{SinkExt, Stream, StreamExt};
 use libp2p::kad::store::MemoryStore;
 use libp2p::multiaddr::Protocol;
-use std::net::Ipv4Addr;
 use libp2p::{
     identity, kad, mdns, noise,
     swarm::{NetworkBehaviour, SwarmEvent},
     tcp, yamux, Multiaddr, Swarm, SwarmBuilder,
 };
-use sled;
 use libp2p_core::{muxing::StreamMuxerBox, Transport};
 use libp2p_identity::PeerId;
 use libp2p_kad::RecordKey;
 use libp2p_webrtc as webrtc;
 use multihash_codetable::{Code, MultihashDigest};
 use rand::thread_rng;
+use sled;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, io};
 use tokio::select;
 use tokio::time::interval;
-use crate::node::boxpeer_dir;
 
 struct FileBlock(Vec<u8>);
 
@@ -53,8 +53,6 @@ struct Behaviour {
 
 pub struct P2PCDNClient {
     blockstore: Arc<SledBlockstore>,
-    queries: HashMap<beetswap::QueryId, Cid>,
-    kad_queries: HashMap<libp2p_kad::QueryId, Cid>,
     command_sender: mpsc::Sender<Command>,
 }
 
@@ -87,11 +85,10 @@ impl P2PCDNClient {
                 yamux::Config::default,
             )?
             .with_other_transport(|id_keys| {
-                Ok(webrtc::tokio::Transport::new(
-                    id_keys.clone(),
-                    cert.expect("Error"),
+                Ok(
+                    webrtc::tokio::Transport::new(id_keys.clone(), cert.expect("Error"))
+                        .map(|(peer_id, conn), _| (peer_id, StreamMuxerBox::new(conn))),
                 )
-                .map(|(peer_id, conn), _| (peer_id, StreamMuxerBox::new(conn))))
             })?
             .with_behaviour(|key| Behaviour {
                 kademlia: kad::Behaviour::new(peer_id, MemoryStore::new(key.public().to_peer_id())),
@@ -107,23 +104,23 @@ impl P2PCDNClient {
             })
             .build();
 
-        swarm
-        .behaviour_mut()
-        .kademlia
-        .set_mode(Some(kad::Mode::Server));
+        // swarm
+        // .behaviour_mut()
+        // .kademlia
+        // .set_mode(Some(kad::Mode::Server));
 
         let (command_sender, command_receiver) = mpsc::channel(0);
         let (event_sender, event_receiver) = mpsc::channel(0);
-        let address_webrtc = Multiaddr::from(Ipv4Addr::new(0, 0, 0, 0))
-        .with(Protocol::Udp(9090))
-        .with(Protocol::WebRTCDirect);
-        swarm.listen_on(address_webrtc).expect("TODO: panic message");
+        let address_webrtc = Multiaddr::from(Ipv4Addr::new(127, 0, 0, 1))
+            .with(Protocol::Udp(9090))
+            .with(Protocol::WebRTCDirect);
+        swarm
+            .listen_on(address_webrtc)
+            .expect("TODO: panic message");
 
         Ok((
             P2PCDNClient {
                 blockstore: blockstore.clone(),
-                queries: HashMap::new(),
-                kad_queries: HashMap::new(),
                 command_sender,
             },
             event_receiver,
@@ -201,10 +198,7 @@ impl P2PCDNClient {
 
         let (sender, receiver) = oneshot::channel();
         self.command_sender
-            .send(Command::RequestFile {
-                cid,
-                sender,
-            })
+            .send(Command::RequestFile { cid, sender })
             .await?;
 
         let file_data = receiver.await??;
@@ -247,7 +241,6 @@ enum Command {
     },
 }
 
-
 pub enum Event {
     FileUploaded(Cid),
     FileRequested(Cid),
@@ -289,25 +282,23 @@ impl EventLoop {
         event: SwarmEvent<BehaviourEvent>,
     ) -> Result<(), anyhow::Error> {
         match event {
-            SwarmEvent::Behaviour(BehaviourEvent::Bitswap(bitswap)) => {
-                match bitswap {
-                    beetswap::Event::GetQueryResponse { query_id, data } => {
-                        self.queries.get(&query_id);
-                        if let Some(sender) = self.pending_requests.remove(&query_id) {
-                            sender
-                                .send(Ok(data))
-                                .map_err(|e| anyhow!("Failed to send file data: {:?}", e))?;
-                        }
-                    }
-                    beetswap::Event::GetQueryError { query_id, error } => {
-                        if let Some(sender) = self.pending_requests.remove(&query_id) {
-                            sender
-                                .send(Err(anyhow!("Error for CID {:?}: {:?}", query_id, error)))
-                                .map_err(|e| anyhow!("Failed to send error: {:?}", e))?;
-                        }
+            SwarmEvent::Behaviour(BehaviourEvent::Bitswap(bitswap)) => match bitswap {
+                beetswap::Event::GetQueryResponse { query_id, data } => {
+                    self.queries.get(&query_id);
+                    if let Some(sender) = self.pending_requests.remove(&query_id) {
+                        sender
+                            .send(Ok(data))
+                            .map_err(|e| anyhow!("Failed to send file data: {:?}", e))?;
                     }
                 }
-            }
+                beetswap::Event::GetQueryError { query_id, error } => {
+                    if let Some(sender) = self.pending_requests.remove(&query_id) {
+                        sender
+                            .send(Err(anyhow!("Error for CID {:?}: {:?}", query_id, error)))
+                            .map_err(|e| anyhow!("Failed to send error: {:?}", e))?;
+                    }
+                }
+            },
             SwarmEvent::Behaviour(BehaviourEvent::Mdns(mdns_event)) => {
                 if let mdns::Event::Discovered(peers) = mdns_event {
                     for (peer_id, multiaddr) in peers {
@@ -324,7 +315,9 @@ impl EventLoop {
             SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad_event)) => {
                 match kad_event {
                     // Handle Kademlia routing update
-                    kad::Event::RoutingUpdated { peer, addresses, .. } => {
+                    kad::Event::RoutingUpdated {
+                        peer, addresses, ..
+                    } => {
                         if let address = addresses.first() {
                             //println!("Protocol {:?}", self.swarm.protocol_names());
                             println!("Discovered peer via Kademlia: {:?} at {:?}", peer, address);
@@ -347,7 +340,10 @@ impl EventLoop {
                     }
                     // Handle Kademlia outbound query progression
                     kad::Event::OutboundQueryProgressed { id, result, .. } => {
-                        if let kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { providers, .. })) = result {
+                        if let kad::QueryResult::GetProviders(Ok(
+                            kad::GetProvidersOk::FoundProviders { providers, .. },
+                        )) = result
+                        {
                             if let Some(sender) = self.pending_get_providers.remove(&id) {
                                 sender.send(providers).expect("Receiver not to be dropped");
                                 self.swarm
@@ -400,7 +396,6 @@ impl EventLoop {
         Ok(())
     }
 
-
     async fn handle_command(&mut self, command: Command) -> Result<(), anyhow::Error> {
         match command {
             Command::UploadFile { file_path, sender } => {
@@ -435,12 +430,13 @@ impl EventLoop {
                     .send(Ok(cid))
                     .map_err(|e| anyhow!("Failed to send CID result: {:?}", e))?;
             }
-            Command::RequestFile {
-                cid,
-                sender,
-            } => {
+            Command::RequestFile { cid, sender } => {
                 let query_id = self.swarm.behaviour_mut().bitswap.get(&cid);
-                let kad_query_id = self.swarm.behaviour_mut().kademlia.get_providers(RecordKey::new(&cid.to_bytes()));
+                let kad_query_id = self
+                    .swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .get_providers(RecordKey::new(&cid.to_bytes()));
                 self.queries.insert(query_id, cid);
                 self.kad_queries.insert(kad_query_id, cid);
                 self.pending_requests.insert(query_id, sender);
