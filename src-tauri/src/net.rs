@@ -1,4 +1,4 @@
-use crate::node::load_or_generate_keypair;
+use crate::node::{load_or_generate_keypair, load_or_generate_certificate};
 use anyhow::{anyhow, Result};
 use beetswap;
 use blockstore::block::CidError;
@@ -75,6 +75,7 @@ impl P2PCDNClient {
 
         let peer_id = id_keys.public().to_peer_id();
         let path = boxpeer_dir().await.expect("Error");
+        let cert = load_or_generate_certificate().await;
         let db = sled::open(path)?;
         let blockstore = Arc::new(SledBlockstore::new(db).await.expect("Err"));
 
@@ -88,7 +89,7 @@ impl P2PCDNClient {
             .with_other_transport(|id_keys| {
                 Ok(webrtc::tokio::Transport::new(
                     id_keys.clone(),
-                    webrtc::tokio::Certificate::generate(&mut thread_rng())?,
+                    cert.expect("Error"),
                 )
                 .map(|(peer_id, conn), _| (peer_id, StreamMuxerBox::new(conn))))
             })?
@@ -106,14 +107,17 @@ impl P2PCDNClient {
             })
             .build();
 
+        swarm
+        .behaviour_mut()
+        .kademlia
+        .set_mode(Some(kad::Mode::Server));
+
         let (command_sender, command_receiver) = mpsc::channel(0);
         let (event_sender, event_receiver) = mpsc::channel(0);
-        let address_webrtc = Multiaddr::from(Ipv4Addr::new(127, 0, 0, 1))
+        let address_webrtc = Multiaddr::from(Ipv4Addr::new(0, 0, 0, 0))
         .with(Protocol::Udp(9090))
         .with(Protocol::WebRTCDirect);
-    let tcp_listen_addr: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse()?;
-    swarm.listen_on(tcp_listen_addr)?;
-        swarm.listen_on(address_webrtc);
+        swarm.listen_on(address_webrtc).expect("TODO: panic message");
 
         Ok((
             P2PCDNClient {
@@ -253,6 +257,7 @@ pub struct EventLoop {
     swarm: Swarm<Behaviour>,
     command_receiver: mpsc::Receiver<Command>,
     event_sender: mpsc::Sender<Event>,
+    pending_dial: HashMap<PeerId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     queries: HashMap<beetswap::QueryId, Cid>,
     kad_queries: HashMap<libp2p_kad::QueryId, Cid>,
     pending_requests: HashMap<beetswap::QueryId, oneshot::Sender<Result<Vec<u8>>>>,
@@ -270,6 +275,7 @@ impl EventLoop {
             swarm,
             command_receiver,
             event_sender,
+            pending_dial: Default::default(),
             queries: Default::default(),
             kad_queries: Default::default(),
             pending_requests: Default::default(),
@@ -311,11 +317,7 @@ impl EventLoop {
                             .add_address(&peer_id, multiaddr.clone());
                         println!("Discovered Peer: {:?}", &multiaddr);
 
-                        if self.swarm.dial(multiaddr.clone()).is_ok() {
-                            println!("Dialing mDNS-discovered peer: {:?}", peer_id);
-                        } else {
-                            println!("Failed to dial mDNS peer: {:?}", peer_id);
-                        }
+                        self.swarm.dial(multiaddr.clone()).expect("Erro dialing");
                     }
                 }
             }
@@ -326,13 +328,21 @@ impl EventLoop {
                         if let address = addresses.first() {
                             //println!("Protocol {:?}", self.swarm.protocol_names());
                             println!("Discovered peer via Kademlia: {:?} at {:?}", peer, address);
-
-                            let address_tcp : Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().expect("Error");
-                            if self.swarm.dial(address_tcp).is_ok(){
-                                println!("Dialing discovered peer TCP: {:?}", peer);
-                            } else  {
-                                println!("Eror Dialing peer: {:?}", peer);
+                            println!("{:?}", &address);
+                            match self.swarm.dial(address.clone()) {
+                                Ok(()) => {
+                                    println!("connected peer TCP: {:?}\n", peer);
+                                }
+                                Err(e) => {
+                                    println!("Error Dialing peer: {:?}\n", e);
+                                }
                             }
+
+                            // if self.swarm.dial(address.clone()).is_ok(){
+                            //     println!("connected peer TCP: {:?}\n", peer);
+                            // } else  {
+                            //     println!("Error Dialing peer: {:?}\n", peer);
+                            // }
                         }
                     }
                     // Handle Kademlia outbound query progression
@@ -354,27 +364,33 @@ impl EventLoop {
                     }
                 }
             }
-            // SwarmEvent::OutgoingConnectionError { peer_id, error, connection_id, .. } => {
-            //     if let Some(peer) = peer_id {
-            //         // Retry using TCP after WebRTC timeout or failure
-            //         if let connection_id = connection_id {
-            //             if let webrtc::tokio::Error::_ = error {
-            //                 // Retry TCP dial after WebRTC failure
-            //                 if self.swarm.dial(peer.clone()).is_ok() {
-            //                     eprintln!("Attempting TCP connection for peer: {:?}", peer);
-            //                 } else {
-            //                     eprintln!("Failed to dial peer {:?} with TCP as well.", peer);
-            //                 }
-            //             } else {
-            //                 eprintln!("Other connection error: {:?}", error);
-            //             }
-            //         }
-            //     }
-            // }
+            SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+                eprintln!(
+                    "Failed to connect to peer: {:?}, error: {:?}",
+                    peer_id, error
+                );
+                if let Some(peer_id) = peer_id {
+                    if let Some(sender) = self.pending_dial.remove(&peer_id) {
+                        let _ = sender.send(Err(Box::new(error)));
+                    }
+                }
+            }
+            SwarmEvent::ConnectionEstablished {
+                peer_id, endpoint, ..
+            } => {
+                if endpoint.is_dialer() {
+                    if let Some(sender) = self.pending_dial.remove(&peer_id) {
+                        let _ = sender.send(Ok(()));
+                        println!("Connection established with peer in If: {:?}", peer_id);
+                    }
+                }
+                println!("Connection established with peer: {:?}", peer_id);
+            }
+
             SwarmEvent::Dialing {
                 peer_id: Some(peer_id),
                 ..
-            } => eprintln!("Dialing {peer_id}"),
+            } => {}
 
             _ => {
                 println!("Did not match any specific event: {:?}", event);

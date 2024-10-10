@@ -24,7 +24,7 @@ struct AppState {
 
 #[tauri::command]
 async fn start_listening(state: State<'_, AppState>) -> Result<String, String> {
-    let address_webrtc : Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().expect("Error");
+    let address_webrtc : Multiaddr = "/ip4/0.0.0.0/tcp/9091".parse().expect("Error");
 
     let mut client = state.client.lock().await;
 
