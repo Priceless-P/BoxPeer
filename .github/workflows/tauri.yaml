@@ -1,9 +1,10 @@
-name: 'publish'
+name: 'publish boxpeer'
 
 on:
   push:
     branches:
       - release
+  workflow_dispatch:
 
 # This workflow will trigger on each push to the `release` branch to create or update a GitHub release, build your app, and upload the artifacts to the release.
 
