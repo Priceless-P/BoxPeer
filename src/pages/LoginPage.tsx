@@ -4,7 +4,6 @@ import useEphemeralKeyPair from "../core/useEphemeralKeyPair";
 import GoogleLogo from "../components/GoogleLogo";
 //import { WalletSelector } from "@aptos-labs/wallet-adapter-ant-design";
 import "@aptos-labs/wallet-adapter-ant-design/dist/index.css";
-import Nav from "./Nav.tsx";
 import {useEffect} from "react";
 import { useNavigate } from 'react-router-dom';
 
@@ -20,9 +19,8 @@ function LoginPage() {
     if (keylessAccount) {
       const accountData = JSON.parse(keylessAccount);
       const { idToken } = accountData.state.accounts[0];
-      console.log(idToken)
       const { exp } = JSON.parse(atob(idToken.raw.split('.')[1]));
-      console.log(exp)
+
 
       if (exp * 1000 > Date.now()) {
         window.location.href = `/callback#id_token=${idToken.raw}`
@@ -45,7 +43,6 @@ function LoginPage() {
 
   return (
       <Layout style={ {backgroundColor: '#ede8f5'}}>
-        <Nav />
       <Row align="middle" justify="center" style={{ height: '100vh', padding: '15px'}}>
         <Col style={{ textAlign: 'center' }}>
           <Title level={1} style={{ marginBottom: '16px' }}>Welcome to BoxPeer</Title>
@@ -59,7 +56,7 @@ function LoginPage() {
           <Button
               type="primary"
               size="large"
-              icon={<GoogleLogo style={{ marginRight: 8 }} />} // GoogleLogo component as an icon
+              icon={<GoogleLogo style={{ marginRight: 8 }} />}
               href={redirectUrl.toString()}
               style={{ display: 'flex', alignItems: 'center' }}
           >

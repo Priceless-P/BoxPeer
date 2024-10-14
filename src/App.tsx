@@ -1,41 +1,35 @@
 import React from 'react';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, Layout } from 'antd';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import Home from './pages/Home';
-import Contents from './pages/Content';
-import ContentDetails from './pages/ContentDetails';
 import ProviderDashboard from './pages/ProviderDashboard';
 import 'antd/dist/reset.css';
 import CallbackPage from "./pages/CallbackPage";
 import LoginPage from "./pages/LoginPage";
 
-// import { invoke } from "@tauri-apps/api/tauri";
 
 const App: React.FC = () => {
 
     const theme = {
         token: {
-            colorPrimary: '#AD49E1',   // Main color
-            colorBgBase: '#EBD3F8',     // Background color
-            colorTextBase: '#2E073F',   // Primary text color
-            colorTextSecondary: '#7A1CAC', // Secondary text color
+            colorPrimary: '#AD49E1',
+            colorBgBase: '#EBD3F8',
+            colorTextBase: '#2E073F',
+            colorTextSecondary: '#7A1CAC',
         },
     };
     return (
         <ConfigProvider theme={theme}>
+        <Layout>
             <div className="App">
                 <Router>
                     <Routes>
-                        <Route path="/home" element={<Home />} />
                         <Route path="/" element={<LoginPage />} />
                         <Route path="/callback" element={<CallbackPage />} />
-                        <Route path="/contents" element={<Contents />} />
                         <Route path="/dashboard" element={<ProviderDashboard />} />
-                        <Route path="/content/:id" element={<ContentDetails />} />
-                        {/* <Route path="/node-dashboard" element={<PeerDashboard />} /> */}
                     </Routes>
                 </Router>
             </div>
+            </Layout>
         </ConfigProvider>
     );
 };

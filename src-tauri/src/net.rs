@@ -1,5 +1,5 @@
 use crate::node::boxpeer_dir;
-use crate::node::{load_or_generate_certificate, load_or_generate_keypair};
+use crate::node::load_or_generate_keypair;
 use anyhow::{anyhow, Result};
 use beetswap;
 use blockstore::block::CidError;
@@ -10,26 +10,24 @@ use futures::{SinkExt, Stream, StreamExt};
 use libp2p::kad::store::MemoryStore;
 use libp2p::multiaddr::Protocol;
 use libp2p::{
-    identity, kad, mdns, noise,
+    identify, identity, kad, mdns,
     swarm::{NetworkBehaviour, SwarmEvent},
-    tcp, yamux, Multiaddr, Swarm, SwarmBuilder,
+    Multiaddr, Swarm, SwarmBuilder,
 };
-use libp2p_core::{muxing::StreamMuxerBox, Transport};
-use libp2p_identity::PeerId;
+use libp2p::{PeerId, StreamProtocol};
 use libp2p_kad::RecordKey;
-use libp2p_webrtc as webrtc;
 use multihash_codetable::{Code, MultihashDigest};
-use rand::thread_rng;
 use sled;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{fs, io};
+use std::{fs};
 use tokio::select;
-use tokio::time::interval;
+use tracing::{info, warn};
+
+const BOXPEER_PROTO_NAME: StreamProtocol = StreamProtocol::new("/ipfs/0.1.0");
 
 struct FileBlock(Vec<u8>);
 
@@ -46,6 +44,7 @@ impl Block<64> for FileBlock {
 
 #[derive(NetworkBehaviour)]
 struct Behaviour {
+    identify: identify::Behaviour,
     bitswap: beetswap::Behaviour<64, SledBlockstore>,
     mdns: mdns::tokio::Behaviour,
     kademlia: kad::Behaviour<MemoryStore>,
@@ -60,8 +59,10 @@ impl P2PCDNClient {
     pub async fn new(
         bootstrap_peers: Option<Vec<Multiaddr>>,
         secret_key_seed: Option<u8>,
-    ) -> std::result::Result<(P2PCDNClient, impl Stream<Item = Event>, EventLoop), Box<dyn Error>>
-    {
+    ) -> std::result::Result<
+        (P2PCDNClient, impl Stream<Item = kad::Event>, EventLoop),
+        Box<dyn Error>,
+    > {
         let id_keys = match secret_key_seed {
             Some(seed) => {
                 let mut bytes = [0u8; 32];
@@ -72,52 +73,83 @@ impl P2PCDNClient {
         };
 
         let peer_id = id_keys.public().to_peer_id();
-        let path = boxpeer_dir().await.expect("Error");
-        let cert = load_or_generate_certificate().await;
-        let db = sled::open(path)?;
+        let path = boxpeer_dir().await.expect("Error with cache");
+        let db: sled::Db;
+
+        loop {
+            match sled::open(&path) {
+                Ok(opened_db) => {
+                    db = opened_db;
+                    break;
+                }
+                Err(_) => {
+                    let fallback_path = format!("{}_fallback", path);
+                    info!(
+                        "DB is still locked, falling back to DB2 at {}",
+                        fallback_path
+                    );
+                    db = sled::open(fallback_path)?;
+                    break;
+                }
+            }
+        }
+
+        let identify = identify::Behaviour::new(identify::Config::new(
+            BOXPEER_PROTO_NAME.to_string(),
+            id_keys.public().clone(),
+        ));
+
         let blockstore = Arc::new(SledBlockstore::new(db).await.expect("Err"));
+        let mut cfg = kad::Config::new(BOXPEER_PROTO_NAME);
+
+        cfg.set_periodic_bootstrap_interval(Some(Duration::from_secs(10)));
+        cfg.set_record_ttl(None);
 
         let mut swarm = SwarmBuilder::with_existing_identity(id_keys)
             .with_tokio()
-            .with_tcp(
-                tcp::Config::default(),
-                noise::Config::new,
-                yamux::Config::default,
-            )?
-            .with_other_transport(|id_keys| {
-                Ok(
-                    webrtc::tokio::Transport::new(id_keys.clone(), cert.expect("Error"))
-                        .map(|(peer_id, conn), _| (peer_id, StreamMuxerBox::new(conn))),
-                )
-            })?
+            .with_quic()
             .with_behaviour(|key| Behaviour {
-                kademlia: kad::Behaviour::new(peer_id, MemoryStore::new(key.public().to_peer_id())),
+                kademlia: kad::Behaviour::with_config(
+                    peer_id,
+                    MemoryStore::new(key.public().to_peer_id()),
+                    cfg,
+                ),
                 mdns: mdns::tokio::Behaviour::new(
                     mdns::Config::default(),
                     key.public().to_peer_id(),
                 )
-                .expect("Error"),
+                .expect("Error with mdns configuring"),
                 bitswap: beetswap::Behaviour::new(blockstore.clone()),
+                identify,
             })?
             .with_swarm_config(|cfg| {
                 cfg.with_idle_connection_timeout(Duration::from_secs(u64::MAX))
             })
             .build();
 
-        // swarm
-        // .behaviour_mut()
-        // .kademlia
-        // .set_mode(Some(kad::Mode::Server));
+        swarm
+            .behaviour_mut()
+            .kademlia
+            .set_mode(Some(kad::Mode::Server));
+
+        let address: Multiaddr = "/ip4/0.0.0.0/udp/0/quic-v1"
+            .parse()
+            .expect("Error with address");
+        swarm.listen_on(address).expect("Error listening");
+
+        // Dial bootstrap peers if provided
+        if let Some(peers) = bootstrap_peers {
+            for peer in peers {
+                if let Err(e) = swarm.dial(peer.clone()) {
+                    eprintln!("Failed to dial peer {}: {}", peer, e);
+                } else {
+                    println!("Dialing bootstrap peer: {}", peer);
+                }
+            }
+        }
 
         let (command_sender, command_receiver) = mpsc::channel(0);
         let (event_sender, event_receiver) = mpsc::channel(0);
-        let address_webrtc = Multiaddr::from(Ipv4Addr::new(127, 0, 0, 1))
-            .with(Protocol::Udp(9090))
-            .with(Protocol::WebRTCDirect);
-        swarm
-            .listen_on(address_webrtc)
-            .expect("TODO: panic message");
-
         Ok((
             P2PCDNClient {
                 blockstore: blockstore.clone(),
@@ -127,6 +159,7 @@ impl P2PCDNClient {
             EventLoop::new(swarm, command_receiver, event_sender, blockstore),
         ))
     }
+
     pub(crate) async fn get_peers_count(
         &mut self,
     ) -> std::result::Result<Vec<PeerId>, Box<dyn Error + Send>> {
@@ -165,35 +198,27 @@ impl P2PCDNClient {
         Ok(contents)
     }
 
-    pub(crate) async fn find_providers(&mut self, cid: Cid) -> HashSet<PeerId> {
-        let cid_key = RecordKey::new(&cid.to_bytes());
-        let (sender, receiver) = oneshot::channel();
-        self.command_sender
-            .send(Command::GetProviders {
-                cid: cid_key,
-                sender,
-            })
+    pub async fn owned_file(&mut self, cid: Cid) -> Result<bool> {
+        if self
+            .blockstore
+            .has(&cid)
             .await
-            .expect("Command receiver not to be dropped.");
-        receiver.await.expect("Sender not to be dropped.")
-    }
-
-    pub(crate) async fn get_listening_addr(
-        &mut self,
-    ) -> std::result::Result<String, Box<dyn Error + Send>> {
-        let (sender, receiver) = oneshot::channel();
-
-        self.command_sender
-            .send(Command::GetActualListeningAddress { sender })
-            .await
-            .expect("No listening address found");
-        receiver.await.expect("Failed to receive listening address")
+            .expect("Error with blockstore")
+        {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     pub async fn request_file(&mut self, cid: Cid) -> Result<Vec<u8>> {
-        if !self.blockstore.has(&cid).await.expect("Error") {
-            println!("CID {:?} not found in local blockstore.", cid);
-            println!("Block store: {:?}", self.blockstore);
+        if !self
+            .blockstore
+            .has(&cid)
+            .await
+            .expect("Error with blockstore")
+        {
+            info!("CID {:?} not found in local blockstore.", cid);
         }
 
         let (sender, receiver) = oneshot::channel();
@@ -205,15 +230,34 @@ impl P2PCDNClient {
         Ok(file_data)
     }
 
-    pub(crate) async fn find_peers(&mut self, target_peer_id: PeerId) {
-        self.command_sender
-            .send(Command::FindPeers { target_peer_id })
-            .await
-            .expect("Command receiver not to be dropped.");
-    }
-}
+    pub async fn lock_file(&mut self, cid: Cid) -> Result<String, anyhow::Error> {
+        // Check if the file exists in the local blockstore
+        if let Ok(true) = self.blockstore.has(&cid).await {
+            // File already exists locally, retrieve it
+            if let Ok(_data) = self.blockstore.get(&cid).await {
+                return Ok("You are already providing this file".to_string());
+            }
+        }
 
-enum Command {
+        // File not found in local blockstore, request it from peers
+        let (sender, receiver) = oneshot::channel();
+        self.command_sender
+            .send(Command::RequestFile { cid, sender })
+            .await
+            .map_err(|e| anyhow!("Failed to send request for file: {:?}", e))?;
+        let file_data = receiver.await??;
+
+        // Store the retrieved file in the local blockstore
+        self.blockstore
+            .put_keyed(&cid, &file_data)
+            .await
+            .map_err(|e| anyhow!("Failed to store block in blockstore: {:?}", e))?;
+
+        Ok(format!("You are now providing file {:?}", &cid))
+    }
+
+}
+pub enum Command {
     StartListening {
         addr: Multiaddr,
         sender: oneshot::Sender<Result<String>>,
@@ -226,30 +270,19 @@ enum Command {
         cid: Cid,
         sender: oneshot::Sender<Result<Vec<u8>>>,
     },
-    FindPeers {
-        target_peer_id: PeerId,
-    },
-    GetActualListeningAddress {
-        sender: oneshot::Sender<std::result::Result<String, Box<dyn Error + Send>>>,
-    },
-    GetPeers {
-        sender: oneshot::Sender<std::result::Result<Vec<PeerId>, Box<dyn Error + Send>>>,
-    },
     GetProviders {
         cid: RecordKey,
         sender: oneshot::Sender<HashSet<PeerId>>,
     },
+    GetPeers {
+        sender: oneshot::Sender<std::result::Result<Vec<PeerId>, Box<dyn Error + Send>>>,
+    },
 }
 
-pub enum Event {
-    FileUploaded(Cid),
-    FileRequested(Cid),
-    PeerDiscovered(PeerId),
-}
 pub struct EventLoop {
     swarm: Swarm<Behaviour>,
     command_receiver: mpsc::Receiver<Command>,
-    event_sender: mpsc::Sender<Event>,
+    event_sender: mpsc::Sender<kad::Event>,
     pending_dial: HashMap<PeerId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     queries: HashMap<beetswap::QueryId, Cid>,
     kad_queries: HashMap<libp2p_kad::QueryId, Cid>,
@@ -261,7 +294,7 @@ impl EventLoop {
     pub(crate) fn new(
         swarm: Swarm<Behaviour>,
         command_receiver: mpsc::Receiver<Command>,
-        event_sender: mpsc::Sender<Event>,
+        event_sender: mpsc::Sender<kad::Event>,
         blockstore: Arc<SledBlockstore>,
     ) -> Self {
         Self {
@@ -306,70 +339,51 @@ impl EventLoop {
                             .behaviour_mut()
                             .kademlia
                             .add_address(&peer_id, multiaddr.clone());
-                        println!("Discovered Peer: {:?}", &multiaddr);
-
-                        self.swarm.dial(multiaddr.clone()).expect("Erro dialing");
+                        info!("Discovered Peer MDNS: {:?}", &multiaddr);
                     }
                 }
             }
-            SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad_event)) => {
-                match kad_event {
-                    // Handle Kademlia routing update
-                    kad::Event::RoutingUpdated {
-                        peer, addresses, ..
-                    } => {
-                        if let address = addresses.first() {
-                            //println!("Protocol {:?}", self.swarm.protocol_names());
-                            println!("Discovered peer via Kademlia: {:?} at {:?}", peer, address);
-                            println!("{:?}", &address);
-                            match self.swarm.dial(address.clone()) {
-                                Ok(()) => {
-                                    println!("connected peer TCP: {:?}\n", peer);
-                                }
-                                Err(e) => {
-                                    println!("Error Dialing peer: {:?}\n", e);
-                                }
+            SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad_event)) => match kad_event {
+                kad::Event::RoutingUpdated {
+                    peer, addresses, ..
+                } => {
+                    if let address = addresses.first() {
+                        info!("Discovered peer via Kademlia: {:?} at {:?}", peer, address);
+                        match self.swarm.dial(address.clone()) {
+                            Ok(()) => {
+                                info!("Dialing peer: {:?}\n", peer);
                             }
-
-                            // if self.swarm.dial(address.clone()).is_ok(){
-                            //     println!("connected peer TCP: {:?}\n", peer);
-                            // } else  {
-                            //     println!("Error Dialing peer: {:?}\n", peer);
-                            // }
-                        }
-                    }
-                    // Handle Kademlia outbound query progression
-                    kad::Event::OutboundQueryProgressed { id, result, .. } => {
-                        if let kad::QueryResult::GetProviders(Ok(
-                            kad::GetProvidersOk::FoundProviders { providers, .. },
-                        )) = result
-                        {
-                            if let Some(sender) = self.pending_get_providers.remove(&id) {
-                                sender.send(providers).expect("Receiver not to be dropped");
-                                self.swarm
-                                    .behaviour_mut()
-                                    .kademlia
-                                    .query_mut(&id)
-                                    .unwrap()
-                                    .finish();
+                            Err(e) => {
+                                warn!("Error Dialing peer: {:?}\n", e);
                             }
                         }
-                    }
-                    _ => {
-                        println!("Other Kademlia event: {:?}", kad_event);
                     }
                 }
-            }
+                kad::Event::OutboundQueryProgressed { id, result, .. } => {
+                    if let kad::QueryResult::GetProviders(Ok(
+                        kad::GetProvidersOk::FoundProviders { providers, .. },
+                    )) = result
+                    {
+                        if let Some(sender) = self.pending_get_providers.remove(&id) {
+                            sender.send(providers).expect("Receiver not to be dropped");
+                            self.swarm
+                                .behaviour_mut()
+                                .kademlia
+                                .query_mut(&id)
+                                .unwrap()
+                                .finish();
+                        }
+                    }
+                }
+                _ => {
+                    info!("Other Kademlia event: {:?}", kad_event);
+                }
+            },
             SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
-                eprintln!(
+                warn!(
                     "Failed to connect to peer: {:?}, error: {:?}",
                     peer_id, error
                 );
-                if let Some(peer_id) = peer_id {
-                    if let Some(sender) = self.pending_dial.remove(&peer_id) {
-                        let _ = sender.send(Err(Box::new(error)));
-                    }
-                }
             }
             SwarmEvent::ConnectionEstablished {
                 peer_id, endpoint, ..
@@ -377,19 +391,74 @@ impl EventLoop {
                 if endpoint.is_dialer() {
                     if let Some(sender) = self.pending_dial.remove(&peer_id) {
                         let _ = sender.send(Ok(()));
-                        println!("Connection established with peer in If: {:?}", peer_id);
                     }
                 }
-                println!("Connection established with peer: {:?}", peer_id);
+                info!("Connection established with peer: {:?}", peer_id);
+            }
+            SwarmEvent::NewListenAddr { address, .. } => {
+                let local_peer_id = *self.swarm.local_peer_id();
+                info!(
+                    "Local node is listening on {:?}",
+                    address.with(Protocol::P2p(local_peer_id))
+                );
             }
 
+            SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+                println!(
+                    "Connection closed with peer: {:?}, reason: {:?}",
+                    peer_id, cause
+                );
+            }
+            SwarmEvent::IncomingConnection {
+                local_addr,
+                send_back_addr,
+                ..
+            } => {
+                info!(
+                    "Incoming connection attempt from {:?} to {:?}",
+                    send_back_addr, local_addr
+                );
+            }
+            SwarmEvent::IncomingConnectionError {
+                local_addr,
+                send_back_addr,
+                error,
+                ..
+            } => {
+                warn!(
+                    "Failed incoming connection from {:?} to {:?}, error: {:?}",
+                    send_back_addr, local_addr, error
+                );
+            }
             SwarmEvent::Dialing {
                 peer_id: Some(peer_id),
                 ..
-            } => {}
+            } => {
+                info!("Dialing peer: {:?}", peer_id);
+            }
+            SwarmEvent::ExpiredListenAddr { address, .. } => {
+                println!("Listen address expired: {:?}", address);
+                self.swarm.listen_on(address).expect("Error listening");
+            }
+            SwarmEvent::ListenerClosed {
+                addresses, reason, ..
+            } => {
+                warn!(
+                    "Listener closed for addresses: {:?}, reason: {:?}",
+                    addresses, reason
+                );
+            }
+            SwarmEvent::ListenerError {
+                listener_id, error, ..
+            } => {
+                warn!("Listener error on address {:?}: {:?}", listener_id, error);
+            }
+            SwarmEvent::NewListenAddr { address, .. } => {
+                info!("Listening on new address: {:?}", address);
+            }
 
             _ => {
-                println!("Did not match any specific event: {:?}", event);
+                warn!("Did not match any specific event: {:?}", event);
             }
         }
 
@@ -411,14 +480,13 @@ impl EventLoop {
                     .cid()
                     .map_err(|e| anyhow!("Failed to generate CID: {:?}", e))?;
 
-                println!("Uploading file with CID: {}", cid);
+                info!("Uploading file with CID: {}", cid);
                 self.blockstore
                     .put_keyed(&cid, block.data())
                     .await
                     .map_err(|e| anyhow!("Failed to store block: {:?}", e))?;
 
                 let cid_key = RecordKey::new(&cid.to_bytes());
-                println!("Record Key {:?}", &cid_key);
                 self.swarm
                     .behaviour_mut()
                     .kademlia
@@ -453,33 +521,15 @@ impl EventLoop {
                     .listen_on(addr)
                     .map(|_| peer_id.to_string())
                     .map_err(|e| anyhow!("Failed to listen on address: {:?}", e));
-
                 sender
                     .send(result)
                     .map_err(|e| anyhow!("Failed to send start listening result: {:?}", e))?;
             }
-            Command::FindPeers { target_peer_id } => {
-                let query_id = self
-                    .swarm
-                    .behaviour_mut()
-                    .kademlia
-                    .get_closest_peers(target_peer_id);
-                println!("{:?}", query_id);
-            }
-            Command::GetActualListeningAddress { sender } => {
-                let mut listeners = self.swarm.listeners();
-                if let Some(listener) = listeners.next() {
-                    sender
-                        .send(Ok(listener.to_string()))
-                        .map_err(|e| anyhow!("Failed to send listener address: {:?}", e))?;
-                } else {
-                    sender
-                        .send(Err(Box::new(io::Error::new(
-                            io::ErrorKind::Other,
-                            "No listening address found",
-                        ))))
-                        .map_err(|e| anyhow!("Failed to send error: {:?}", e))?;
-                }
+
+            Command::GetProviders { cid, sender } => {
+                let query_id = self.swarm.behaviour_mut().kademlia.get_providers(cid);
+                self.pending_get_providers.insert(query_id, sender);
+                info!("Searching for providers for CID, query ID: {:?}", query_id);
             }
             Command::GetPeers { sender } => {
                 let peers: Vec<PeerId> = self.swarm.connected_peers().cloned().collect();
@@ -487,42 +537,19 @@ impl EventLoop {
                     .send(Ok(peers))
                     .map_err(|e| anyhow!("Failed to send peers: {:?}", e))?;
             }
-            Command::GetProviders { cid, sender } => {
-                let query_id = self.swarm.behaviour_mut().kademlia.get_providers(cid);
-                self.pending_get_providers.insert(query_id, sender);
-                println!("Searching for providers for CID, query ID: {:?}", query_id);
-            }
         }
 
         Ok(())
     }
 
     pub async fn run(mut self) {
-        let mut listen_interval = interval(Duration::from_secs(300));
-
         loop {
             select! {
-                    event = self.swarm.select_next_some() => {
-                        // Handle swarm event
-                        if let Err(e) = self.handle_event(event).await {
-                            eprintln!("Error in event handling: {:?}", e);
-                        }
-                    },
-                    command = self.command_receiver.next() => {
-                        // Handle command
-                        if let Some(command) = command {
-                            if let Err(e) = self.handle_command(command).await {
-                                eprintln!("Error in command handling: {:?}", e);
-                            }
-                        }
-                    },
-                    _ = listen_interval.tick() => {
-                    // let listening_addr = self.swarm.listeners().next().cloned().expect("Error getting listening addr");
-
-                    // if let Err(e) = self.swarm.listen_on(listening_addr) {
-                    //     eprintln!("Failed to restart listening: {:?}", e);
-                    // }
-                }
+                event = self.swarm.select_next_some() => self.handle_event(event).await.expect("Error handling event"),
+                command = self.command_receiver.next() => match command {
+                    Some(c) => self.handle_command(c).await.expect("Error handling command"),
+                    None=>  return,
+                },
             }
         }
     }

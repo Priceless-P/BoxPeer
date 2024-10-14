@@ -1,5 +1,5 @@
 [package]
-name = "BoxPeer"
+name = "box_peer"
 version = "0.0.1"
 description = "A decentralized peer-2-peer CDN"
 authors = ["Prisca Chidimma"]
@@ -17,11 +17,11 @@ libp2p-kad = {version = "0.46" }
 tokio = { version = "1", features = ["full"] }
 lazy_static = {version = "1.4"}
 futures = { version= "0.3" }
-libp2p = { version = "0.54.1", features = ["mdns", "tokio", "gossipsub", "cbor", "dns", "kad", "noise", "macros", "request-response", "tcp", "websocket", "yamux"] }
+libp2p = { version = "0.54.1", features = ["mdns", "tokio", "identify", "kad", "noise", "macros", "tcp", "yamux", "quic"] }
 libp2p-bitswap = { version = "0.25.1" }
 tracing = { version = "0.1.40" }
-libp2p-webrtc = {version = "0.8.0-alpha", features= ["tokio", "pem"] }
-libp2p-webrtc-websys = "0.4.0-alpha"
+# libp2p-webrtc = {version = "0.8.0-alpha", features= ["tokio", "pem"] }
+# libp2p-webrtc-websys = "0.4.0-alpha"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 blockstore = {version = "0.7", features = ["sled"] }
 sled = "0.34"
@@ -39,7 +39,7 @@ serde_json = "1"
 devtools = "0.3.3"
 matches = "0.1.10"
 sha2 = "0.10.8"
-sqlx = { version = "0.8.1", features = ["sqlite", "runtime-tokio-native-tls", "macros"] }
+# sqlx = { version = "0.8.1", features = ["sqlite", "runtime-tokio-native-tls", "macros"] }
 hex = "0.4.3"
 base64 = "0.22.1"
 tokio-stream = "0.1.16"

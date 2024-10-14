@@ -8,28 +8,34 @@ mod node;
 use crate::net::P2PCDNClient;
 use anyhow::Result;
 use cid::Cid;
-use libp2p::multiaddr::{Multiaddr, Protocol};
+use libp2p::{
+    kad,
+    multiaddr::{Multiaddr},
+};
 use libp2p_core::PeerId;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
-use tauri::{async_runtime::spawn, Manager, State};
+use tauri::{async_runtime::spawn, State};
 use tokio::sync::Mutex as AsyncMutex;
+use tracing::Level;
 
 struct AppState {
     client: Arc<AsyncMutex<P2PCDNClient>>,
-    network_events: Arc<AsyncMutex<Pin<Box<dyn futures::Stream<Item = net::Event> + Send>>>>,
+    network_events: Arc<AsyncMutex<Pin<Box<dyn futures::Stream<Item = kad::Event> + Send>>>>,
 }
 
 #[tauri::command]
 async fn start_listening(state: State<'_, AppState>) -> Result<String, String> {
-    let address_webrtc: Multiaddr = "/ip4/127.0.0.1/tcp/9091".parse().expect("Error");
+    let address: Multiaddr = "/ip4/0.0.0.0/udp/0/quic-v1"
+        .parse()
+        .expect("Error with address");
 
     let mut client = state.client.lock().await;
 
     let id = client
-        .start_listening(address_webrtc.clone())
+        .start_listening(address.clone())
         .await
         .map_err(|e| e.to_string())?;
 
@@ -54,7 +60,6 @@ async fn list_peers(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     }
 }
 
-// Tauri command to upload a file.
 #[tauri::command]
 async fn upload_file(state: State<'_, AppState>, file_path: String) -> Result<String, String> {
     let path = PathBuf::from(file_path);
@@ -66,19 +71,27 @@ async fn upload_file(state: State<'_, AppState>, file_path: String) -> Result<St
         .map_err(|e| e.to_string())
 }
 
-// Tauri command to request a file by CID and save it to the given path.
 #[tauri::command]
-async fn request_file(
-    state: State<'_, AppState>,
-    cid: String,
-    save_path: String,
-) -> Result<Vec<u8>, String> {
+async fn request_file(state: State<'_, AppState>, cid: String) -> Result<Vec<u8>, String> {
     let cid = cid
         .parse()
         .map_err(|e| format!("Request file error: {}", e))?;
-    let path = PathBuf::from(save_path);
     let mut client = state.client.lock().await;
     client.request_file(cid).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn lock_file(state: State<'_, AppState>, cid: String) -> Result<String, String> {
+    let cid = cid.parse().map_err(|e| format!("Lock file error: {}", e))?;
+    let mut client = state.client.lock().await;
+    client.lock_file(cid).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn has_file(state: State<'_, AppState>, cid: String) -> Result<bool, String> {
+    let cid = cid.parse().map_err(|e| format!("Lock file error: {}", e))?;
+    let mut client = state.client.lock().await;
+    client.owned_file(cid).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -94,6 +107,8 @@ async fn request_files(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = tracing_subscriber::fmt().with_max_level(Level::WARN).init();
+
     let (client, network_events, network_event_loop) = P2PCDNClient::new(None, None).await?;
     spawn(network_event_loop.run());
     let app_state = AppState {
@@ -108,7 +123,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             upload_file,
             list_peers,
             request_file,
-            request_files
+            request_files,
+            lock_file,
+            has_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running BoxPeer application");

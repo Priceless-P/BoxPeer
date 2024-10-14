@@ -46,5 +46,5 @@ export type EncryptedScopedIdToken = z.infer<typeof scopedPayloadSchema>;
 export type PeerInfo = {
     peer_id: string;
     listening_addr: string;
-    node_type: string; 
+    node_type: string;
   };

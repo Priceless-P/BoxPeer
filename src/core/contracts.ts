@@ -13,10 +13,12 @@ const aptos = new Aptos(config);
 export const upload_content = async (
     account: KeylessAccount,
     cid: string,
-    nodes: string[],
     fee_paid: U64,
     consumer_fee: U64,
-    file_type: string
+    file_type: string,
+    owner_name: string,
+    description: string,
+    title: string,
   ) => {
     try {
       // Build a simple transaction using aptos SDK
@@ -25,7 +27,7 @@ export const upload_content = async (
         data: {
             function: `${moduleAddress}::BoxPeer::upload_content`,
             typeArguments: [],
-            functionArguments: [cid, nodes, fee_paid, consumer_fee, file_type]
+            functionArguments: [cid, fee_paid, consumer_fee, file_type, owner_name, description, title]
         }
     });
 
@@ -40,30 +42,52 @@ export const upload_content = async (
     }
   };
 
-export const queryRegistry = async (accountAddress: string, cid: string): Promise<string> => {
-  try {
-    const result = await aptos.getAccountResource({
-      accountAddress,
-      resourceType: `${moduleAddress}::BoxPeer::ContentRegistry`,
+  export const payForContent = async (
+    account: KeylessAccount,
+    cid: string,
+  ) => {
+    try {
+      const rawTransaction = await aptos.transaction.build.simple({
+        sender: account.accountAddress.bcsToHex().toString(),
+        data: {
+            function: `${moduleAddress}::BoxPeer::pay_for_content`,
+            typeArguments: [],
+            functionArguments: [cid]
+        }
     });
 
-
-    console.log("Content Registry resources", result)
-    const contentRegistry = result.contents;
-    const content = contentRegistry.find((content: any) => content.cid === cid);
-
-    if (!content) {
-      console.error(`No content found with cid: ${cid}`);
-      return "";
+    const signedTxn = await aptos.signAndSubmitTransaction({ signer: account, transaction: rawTransaction });
+      await aptos.waitForTransaction({ transactionHash: signedTxn.hash });
+      return `Success. Transaction hash ${signedTxn.hash}`;
+    } catch (error: any) {
+      console.error('Error submitting transaction:', error.message);
+      return `Failed to pay for content: ${error.message}`;
     }
+  };
 
-    // Return the file_type for the matched cid
-    return content.file_type;
-  } catch (error: any) {
-    console.error("Error fetching content registry:", error);
-    return "";
-  }
-};
+  export const getReward = async (
+    account: KeylessAccount,
+    cid: string,
+    amount: U64
+  ) => {
+    try {
+      const rawTransaction = await aptos.transaction.build.simple({
+        sender: account.accountAddress.bcsToHex().toString(),
+        data: {
+            function: `${moduleAddress}::BoxPeer::get_reward`,
+            typeArguments: [],
+            functionArguments: [cid, amount]
+        }
+    });
+
+    const signedTxn = await aptos.signAndSubmitTransaction({ signer: account, transaction: rawTransaction });
+      await aptos.waitForTransaction({ transactionHash: signedTxn.hash });
+      return `Success. Transaction hash ${signedTxn.hash}`;
+    } catch (error: any) {
+      console.error('Error submitting transaction:', error.message);
+      return `Failed to pay for content: ${error.message}`;
+    }
+  };
 
 // Function to query and fetch all Content events globally and collect CIDs
 export const fetchAllContentCIDs = async (): Promise<string[]> => {
@@ -71,15 +95,14 @@ export const fetchAllContentCIDs = async (): Promise<string[]> => {
 query EventQuery {
   events(
     offset: 0
-    limit: 1
+    limit: 100
     where: {
-      type: {_eq: "0xbca47e0e304b5dcd2b54c9d6683d1cd11010d6453798da34acd1ae5065c4ff5f::BoxPeer::Content"}
+      account_address: {
+        _eq: "0x61c8f3e7ecbcda5dd641c434b277a13b6076c09de32322ce197d2fe3f1e54ef1"
+      }
+      type: {_eq: "0x61c8f3e7ecbcda5dd641c434b277a13b6076c09de32322ce197d2fe3f1e54ef1::BoxPeer::Content"}
     }
   ) {
-    transaction_version
-    account_address
-    creation_number
-    event_index
     type
     data
   }
@@ -87,7 +110,8 @@ query EventQuery {
   `;
     try {
         if (config.indexer) {
-            const response = await fetch(config.indexer, {
+            const corsProxy = 'https://thingproxy.freeboard.io/fetch/';
+            const response = await fetch(`${corsProxy}${config.indexer}`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -103,11 +127,8 @@ query EventQuery {
                 console.error("GraphQL query failed", result.errors);
                 return [];
               }
-                    // Extract and filter CIDs from the events
       const events = result.data?.events || [];
-      const cids = events.map((event: any) => event.attributes.cid);
-
-      console.log("Fetched CIDs:", cids);
+      const cids = events.map((event: any) => event.data);
 
       return cids;
         }
@@ -118,3 +139,30 @@ query EventQuery {
       return [];
     }
   };
+
+export const getPurchasersByCid = async(cid: string) => {
+    const result = await aptos.view({
+        payload: {
+            function: `${moduleAddress}::BoxPeer::get_purchasers_by_cid`,
+            typeArguments: [],
+            functionArguments: [cid],
+        },
+    });
+    console.log(result)
+    return result;
+}
+
+export const getTotalEarned = async(owner: string) => {
+    const result = await aptos.view({
+        payload: {
+            function: `${moduleAddress}::BoxPeer::get_total_earned_by_owner`,
+            typeArguments: [],
+            functionArguments: [owner],
+        },
+    });
+    console.log(result)
+    const totalEarnedMicroAPT = result[0] || 0;
+    const totalEarnedAPT = Number(totalEarnedMicroAPT) / 1e8;
+
+    return totalEarnedAPT.toFixed(3)
+}

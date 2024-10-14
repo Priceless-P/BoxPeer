@@ -4,7 +4,7 @@ version = "1.0.0"
 authors = []
 
 [addresses]
-BoxPeer_addr = "0xbca47e0e304b5dcd2b54c9d6683d1cd11010d6453798da34acd1ae5065c4ff5f"
+BoxPeer_addr = "0x61c8f3e7ecbcda5dd641c434b277a13b6076c09de32322ce197d2fe3f1e54ef1"
 
 [dev-addresses]
 BoxPeer_addr = "0x123"
