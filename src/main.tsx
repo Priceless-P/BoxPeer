@@ -7,11 +7,11 @@ import App from "./App";
 
 const wallets = [new PetraWallet()];
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-      <AptosWalletAdapterProvider plugins={wallets} autoConnect={true}>
-      <PreviewProvider>
-          <App />
-          </PreviewProvider>
-      </AptosWalletAdapterProvider>
-  </React.StrictMode>,
+    <React.StrictMode>
+        <AptosWalletAdapterProvider plugins={wallets} autoConnect={true}>
+            <PreviewProvider>
+                <App />
+            </PreviewProvider>
+        </AptosWalletAdapterProvider>
+    </React.StrictMode>,
 );

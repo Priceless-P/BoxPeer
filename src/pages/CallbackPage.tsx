@@ -37,8 +37,8 @@ function CallbackPage() {
 
     return (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw' }}>
-        <Spin tip="Redirecting..." size="large" />
-    </div>
+            <Spin tip="Redirecting..." size="large" />
+        </div>
     );
 }
 

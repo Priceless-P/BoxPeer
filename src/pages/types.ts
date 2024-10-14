@@ -1,4 +1,4 @@
-export interface PeerDashboardProps {}
+export interface PeerDashboardProps { }
 
 export interface Peer {
     id: string;
@@ -15,19 +15,19 @@ export interface FileObject {
     fileType: string;
     feePaid: string;
     consumerFee: string;
-      owner_name: string;
-      title: string;
-      description: string;
-  }
+    owner_name: string;
+    title: string;
+    description: string;
+}
 
-  export type PreviewContent = {
+export type PreviewContent = {
     cid: string;
     element: JSX.Element;
     fileObject: FileObject;
-  };
+};
 
 export interface PreviewContextType {
     previewContent: PreviewContent[];
     updatePreviewContent: (cid: string, element: JSX.Element, fileObject: FileObject) => void;
     getPreviewByCid: (cid: string) => PreviewContent | undefined;
-  }
+}

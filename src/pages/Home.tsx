@@ -12,7 +12,7 @@ const Home = () => {
         <Layout style={{ minHeight: '100vh' }}>
             <Nav />
             {/* Hero Section */}
-            <Content style={{  padding: '50px 0' }}>
+            <Content style={{ padding: '50px 0' }}>
                 <Row justify="center" align="middle" gutter={32}>
                     <Col xs={24} md={12} style={{ textAlign: 'center' }} >
                         <Title level={1}>Decentralized Content Delivery Network</Title>

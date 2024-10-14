@@ -19,16 +19,16 @@ const App: React.FC = () => {
     };
     return (
         <ConfigProvider theme={theme}>
-        <Layout>
-            <div className="App">
-                <Router>
-                    <Routes>
-                        <Route path="/" element={<LoginPage />} />
-                        <Route path="/callback" element={<CallbackPage />} />
-                        <Route path="/dashboard" element={<ProviderDashboard />} />
-                    </Routes>
-                </Router>
-            </div>
+            <Layout>
+                <div className="App">
+                    <Router>
+                        <Routes>
+                            <Route path="/" element={<LoginPage />} />
+                            <Route path="/callback" element={<CallbackPage />} />
+                            <Route path="/dashboard" element={<ProviderDashboard />} />
+                        </Routes>
+                    </Router>
+                </div>
             </Layout>
         </ConfigProvider>
     );

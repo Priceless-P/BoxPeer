@@ -128,7 +128,7 @@ const ProviderDashboard: React.FC = () => {
             const amount = new U64(fileToMove.feePaid * 0.1);
             if (activeAccount) {
                 const reward = await getReward(activeAccount, cid, amount);
-            message.success(reward)
+                message.success(reward)
             }
 
 
@@ -208,8 +208,8 @@ const ProviderDashboard: React.FC = () => {
     }
     const username = userData?.state?.accounts?.[0]?.idToken?.decoded?.given_name || 'Unknown User';
 
-     // Provide a file to the network
-     const provideFile = async () => {
+    // Provide a file to the network
+    const provideFile = async () => {
         if (!selectedFile) {
             message.error('Please select a file first');
             return;
@@ -239,7 +239,7 @@ const ProviderDashboard: React.FC = () => {
             message.error(`Failed to provide file: ${error}`);
         }
         finally {
-        setLoading(false)
+            setLoading(false)
         }
     };
 
@@ -270,10 +270,10 @@ const ProviderDashboard: React.FC = () => {
 
     return (
         <Layout style={{ minHeight: '100vh' }}>
-         <Header style={{ color: '#fff', fontSize: '1.5rem', background: '#2E073F', height: '55px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' }}>
+            <Header style={{ color: '#fff', fontSize: '1.5rem', background: '#2E073F', height: '55px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' }}>
                 <Typography.Title level={3} style={{ margin: 0, color: '#fff' }}>Dashboard</Typography.Title>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ padding: '16px', textAlign: 'center' }}>
+                    <div style={{ padding: '16px', textAlign: 'center' }}>
                         <GoogleLogo />
                     </div>
                     <Typography.Text
@@ -296,7 +296,7 @@ const ProviderDashboard: React.FC = () => {
                 <Sider width={150} style={{ background: '#2E073F' }}>
 
                     <Menu style={{ background: '#2E073F' }} >
-                    <Menu.Item key="1" style={{ background: '#2E073F' }}>
+                        <Menu.Item key="1" style={{ background: '#2E073F' }}>
                             <span style={{ color: 'white', cursor: 'pointer' }} onClick={() => copyToClipboard('https://www.aptosfaucet.com')}>
                                 Get Test APT
                             </span>
@@ -309,159 +309,159 @@ const ProviderDashboard: React.FC = () => {
                     </Menu>
                 </Sider>
 
-            <Layout style={{ padding: '20px 24px' }}>
-              <Content>
-                {loading ? <Spin /> : (
-                  <>
-                    <Row gutter={16}>
-                      <Col span={24}>
-                        <Row gutter={16}>
-                          <Col span={8}>
-                            <div onClick={() => peerId && copyToClipboard(peerId)} style={{ cursor: 'pointer', ...columnStyle }}>
-                              <Statistic
-                                title="Peer ID"
-                                value={peerId ? `${peerId.slice(0, 6)}...` : 'N/A'}
-                                prefix={<ClusterOutlined />}
-                              />
-                            </div>
-                          </Col>
-                          <Col span={8}>
-                            <div style={columnStyle}>
-                              <Statistic title="Wallet Balance" value={accountBalance} />
-                            </div>
-                          </Col>
-                          <Col span={8}>
-                            <div style={columnStyle}>
-                              <Statistic title="Total Files Shared" value={sharedFiles.length} />
-                            </div>
-                          </Col>
-                        </Row>
+                <Layout style={{ padding: '20px 24px' }}>
+                    <Content>
+                        {loading ? <Spin /> : (
+                            <>
+                                <Row gutter={16}>
+                                    <Col span={24}>
+                                        <Row gutter={16}>
+                                            <Col span={8}>
+                                                <div onClick={() => peerId && copyToClipboard(peerId)} style={{ cursor: 'pointer', ...columnStyle }}>
+                                                    <Statistic
+                                                        title="Peer ID"
+                                                        value={peerId ? `${peerId.slice(0, 6)}...` : 'N/A'}
+                                                        prefix={<ClusterOutlined />}
+                                                    />
+                                                </div>
+                                            </Col>
+                                            <Col span={8}>
+                                                <div style={columnStyle}>
+                                                    <Statistic title="Wallet Balance" value={accountBalance} />
+                                                </div>
+                                            </Col>
+                                            <Col span={8}>
+                                                <div style={columnStyle}>
+                                                    <Statistic title="Total Files Shared" value={sharedFiles.length} />
+                                                </div>
+                                            </Col>
+                                        </Row>
 
-                        <Row gutter={16} style={{ marginTop: 16 }}>
-                          <Col span={8}>
-                            <div style={columnStyle}>
-                              <Statistic title="Total Amount Spent" value={`${totalAmountSpent.toFixed(2)} APT`} />
-                            </div>
-                          </Col>
-                          <Col span={8}>
-                            <div style={columnStyle}>
-                              <Statistic title="Total Amount Earned" value={`${totalEarned} APT`} />
-                            </div>
-                          </Col>
-                          <Col span={8}>
-                            <div style={columnStyle}>
-                              <Statistic title="Connected Peers" value={peers.length} />
+                                        <Row gutter={16} style={{ marginTop: 16 }}>
+                                            <Col span={8}>
+                                                <div style={columnStyle}>
+                                                    <Statistic title="Total Amount Spent" value={`${totalAmountSpent.toFixed(2)} APT`} />
+                                                </div>
+                                            </Col>
+                                            <Col span={8}>
+                                                <div style={columnStyle}>
+                                                    <Statistic title="Total Amount Earned" value={`${totalEarned} APT`} />
+                                                </div>
+                                            </Col>
+                                            <Col span={8}>
+                                                <div style={columnStyle}>
+                                                    <Statistic title="Connected Peers" value={peers.length} />
 
-                            </div>
-                          </Col>
-                        </Row>
-                      </Col>
-                    </Row>
+                                                </div>
+                                            </Col>
+                                        </Row>
+                                    </Col>
+                                </Row>
 
-                    <Row gutter={16} style={{ marginTop: 40 }}>
-  <Col span={24}>
-    <Typography.Title level={4}>Upload a File</Typography.Title>
+                                <Row gutter={16} style={{ marginTop: 40 }}>
+                                    <Col span={24}>
+                                        <Typography.Title level={4}>Upload a File</Typography.Title>
 
-    {/* File Selection */}
-    <Button
-      icon={<CloudUploadOutlined />}
-      onClick={handleFileChange}
-      style={{ marginBottom: 16 }}
-    >
-      Select File
-    </Button>
-    {fileTitle && (
-      <Col>
-        <Typography.Text type="secondary">Selected File: {selectedFile?.name}</Typography.Text>
-      </Col>
-    )}
+                                        {/* File Selection */}
+                                        <Button
+                                            icon={<CloudUploadOutlined />}
+                                            onClick={handleFileChange}
+                                            style={{ marginBottom: 16 }}
+                                        >
+                                            Select File
+                                        </Button>
+                                        {fileTitle && (
+                                            <Col>
+                                                <Typography.Text type="secondary">Selected File: {selectedFile?.name}</Typography.Text>
+                                            </Col>
+                                        )}
 
-    <Input
-      placeholder="Enter file name"
-      value={fileTitle}
-      onChange={(e) => setFileTitle(e.target.value)}
-      style={{ marginTop: 16, width: '100%' }}
-      maxLength={100}
-    />
-    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-      Maximum 100 characters
-    </Typography.Text>
+                                        <Input
+                                            placeholder="Enter file name"
+                                            value={fileTitle}
+                                            onChange={(e) => setFileTitle(e.target.value)}
+                                            style={{ marginTop: 16, width: '100%' }}
+                                            maxLength={100}
+                                        />
+                                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                            Maximum 100 characters
+                                        </Typography.Text>
 
-    {/* File Description */}
-    <Input.TextArea
-      placeholder="Enter a short description"
-      value={fileDescription}
-      onChange={(e) => setFileDescription(e.target.value)}
-      style={{ marginTop: 16, width: '100%' }}
-      autoSize={{ minRows: 3, maxRows: 6 }}
-    />
+                                        {/* File Description */}
+                                        <Input.TextArea
+                                            placeholder="Enter a short description"
+                                            value={fileDescription}
+                                            onChange={(e) => setFileDescription(e.target.value)}
+                                            style={{ marginTop: 16, width: '100%' }}
+                                            autoSize={{ minRows: 3, maxRows: 6 }}
+                                        />
 
-    {/* Pricing Option */}
-    <Radio.Group
-      onChange={(e) => {
-        setIsPaid(e.target.value === 'paid');
-        if (e.target.value === 'free') {
-          setConsumerFeeInput(0);
-        }
-      }}
-      value={isPaid ? 'paid' : 'free'}
-      style={{ marginTop: 16 }}
-    >
-      <Radio value="free">Free</Radio>
-      <Radio value="paid">Paid</Radio>
-    </Radio.Group>
+                                        {/* Pricing Option */}
+                                        <Radio.Group
+                                            onChange={(e) => {
+                                                setIsPaid(e.target.value === 'paid');
+                                                if (e.target.value === 'free') {
+                                                    setConsumerFeeInput(0);
+                                                }
+                                            }}
+                                            value={isPaid ? 'paid' : 'free'}
+                                            style={{ marginTop: 16 }}
+                                        >
+                                            <Radio value="free">Free</Radio>
+                                            <Radio value="paid">Paid</Radio>
+                                        </Radio.Group>
 
-    {/* Consumer Fee Input for Paid Option */}
-    {isPaid && (
-      <Input
-        type="number"
-        placeholder="Enter fee in APT"
-        value={consumerFeeInput}
-        onChange={(e) => setConsumerFeeInput(parseFloat(e.target.value))}
-        style={{ marginTop: 16, width: '100%' }}
-        min={0}
-        step={0.01}
-      />
-    )}
-    {isPaid && (
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        Specify the fee in APT (e.g., 0.1). Leave blank for free content.
-      </Typography.Text>
-    )}
+                                        {/* Consumer Fee Input for Paid Option */}
+                                        {isPaid && (
+                                            <Input
+                                                type="number"
+                                                placeholder="Enter fee in APT"
+                                                value={consumerFeeInput}
+                                                onChange={(e) => setConsumerFeeInput(parseFloat(e.target.value))}
+                                                style={{ marginTop: 16, width: '100%' }}
+                                                min={0}
+                                                step={0.01}
+                                            />
+                                        )}
+                                        {isPaid && (
+                                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                                Specify the fee in APT (e.g., 0.1). Leave blank for free content.
+                                            </Typography.Text>
+                                        )}
 
-    {/* Upload Button */}
-    <Button
-      type="primary"
-      onClick={provideFile}
-      disabled={!fileTitle || (isPaid && (!consumerFeeInput || consumerFeeInput <= 0))}
-      style={{ marginTop: 16 }}
-    >
-      Upload
-    </Button>
-  </Col>
-</Row>
+                                        {/* Upload Button */}
+                                        <Button
+                                            type="primary"
+                                            onClick={provideFile}
+                                            disabled={!fileTitle || (isPaid && (!consumerFeeInput || consumerFeeInput <= 0))}
+                                            style={{ marginTop: 16 }}
+                                        >
+                                            Upload
+                                        </Button>
+                                    </Col>
+                                </Row>
 
 
-                    <Row gutter={16} style={{ marginTop: 30, width: '100%' }}>
-                      <Col span={24} style={{ width: '100%' }}>
-                        <Typography.Title level={4}>Shared Files</Typography.Title>
-                        <Table dataSource={sharedFiles} columns={sharedColumns} pagination={false} style={{ width: '100%' }}/>
-                      </Col>
-                    </Row>
+                                <Row gutter={16} style={{ marginTop: 30, width: '100%' }}>
+                                    <Col span={24} style={{ width: '100%' }}>
+                                        <Typography.Title level={4}>Shared Files</Typography.Title>
+                                        <Table dataSource={sharedFiles} columns={sharedColumns} pagination={false} style={{ width: '100%' }} />
+                                    </Col>
+                                </Row>
 
-                    <Row gutter={16} style={{ marginTop: 30 }}>
-                      <Col span={24}>
-                        <Typography.Title level={4}>Other Files</Typography.Title>
-                        <Table dataSource={otherFiles} columns={columns} pagination={false} style={{ width: '100%' }}/>
-                      </Col>
-                    </Row>
-                  </>
-                )}
-              </Content>
+                                <Row gutter={16} style={{ marginTop: 30 }}>
+                                    <Col span={24}>
+                                        <Typography.Title level={4}>Other Files</Typography.Title>
+                                        <Table dataSource={otherFiles} columns={columns} pagination={false} style={{ width: '100%' }} />
+                                    </Col>
+                                </Row>
+                            </>
+                        )}
+                    </Content>
+                </Layout>
             </Layout>
-          </Layout>
         </Layout>
-      );
+    );
 };
 
 export default ProviderDashboard;
