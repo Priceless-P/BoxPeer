@@ -8,10 +8,7 @@ mod node;
 use crate::net::P2PCDNClient;
 use anyhow::Result;
 use cid::Cid;
-use libp2p::{
-    kad,
-    multiaddr::{Multiaddr},
-};
+use libp2p::{kad, multiaddr::Multiaddr};
 use libp2p_core::PeerId;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
@@ -52,9 +49,7 @@ async fn list_peers(state: State<'_, AppState>) -> Result<Vec<String>, String> {
                 peers.into_iter().map(|peer| peer.to_string()).collect();
             Ok(peer_strings)
         }
-        Err(e) => {
-            Err(format!("Failed to get peers: {}", e))
-        }
+        Err(e) => Err(format!("Failed to get peers: {}", e)),
     }
 }
 
@@ -106,10 +101,10 @@ async fn request_files(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt().with_max_level(Level::WARN).init();
-    let bootstrap_peers: Option<Vec<Multiaddr>> = Some(vec![
-        "/ip4/203.161.57.50/udp/9090/quic-v1".parse().unwrap(),
-    ]);
-    let (client, network_events, network_event_loop) = P2PCDNClient::new(bootstrap_peers, None).await?;
+    let bootstrap_peers: Option<Vec<Multiaddr>> =
+        Some(vec!["/ip4/203.161.57.50/udp/9090/quic-v1".parse().unwrap()]);
+    let (client, network_events, network_event_loop) =
+        P2PCDNClient::new(bootstrap_peers, None).await?;
     spawn(network_event_loop.run());
     let app_state = AppState {
         client: Arc::new(AsyncMutex::new(client)),

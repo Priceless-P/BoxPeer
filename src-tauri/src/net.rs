@@ -20,10 +20,10 @@ use multihash_codetable::{Code, MultihashDigest};
 use sled;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{fs};
 use tokio::select;
 use tracing::{info, warn};
 
@@ -255,7 +255,6 @@ impl P2PCDNClient {
 
         Ok(format!("You are now providing file {:?}", &cid))
     }
-
 }
 pub enum Command {
     StartListening {
