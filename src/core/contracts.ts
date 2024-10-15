@@ -1,11 +1,13 @@
 
 import { Aptos, AptosConfig, KeylessAccount, U64 } from "@aptos-labs/ts-sdk";
+import { Network } from "aptos";
 const API_KEY = import.meta.env.VITE_API_KEY;
 const moduleAddress = import.meta.env.VITE_moduleAddress;
 
 const config = new AptosConfig({
+  network: Network.TESTNET,
   fullnode: `https://aptos-testnet.nodit.io/${API_KEY}/v1`,
-  indexer: `https://aptos-testnet.nodit.io/${API_KEY}/v1/graphql`,
+ indexer: `https://aptos-testnet.nodit.io/${API_KEY}/v1/graphql`,
 });
 
 const aptos = new Aptos(config);
@@ -89,8 +91,9 @@ export const upload_content = async (
     }
   };
 
+
 // Function to query and fetch all Content events globally and collect CIDs
-export const fetchAllContentCIDs = async (): Promise<string[]> => {
+export const fetchAllContentCIDsNodit = async (): Promise<string[]> => {
     const queryContentEvents = `
 query EventQuery {
   events(
@@ -110,8 +113,8 @@ query EventQuery {
   `;
     try {
         if (config.indexer) {
-            const corsProxy = 'https://thingproxy.freeboard.io/fetch/';
-            const response = await fetch(`${corsProxy}${config.indexer}`, {
+        const proxy = `http://localhost:3001/proxy/`
+            const response = await fetch(`${proxy}`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -127,6 +130,7 @@ query EventQuery {
                 console.error("GraphQL query failed", result.errors);
                 return [];
               }
+              console.log(result.data.json)
       const events = result.data?.events || [];
       const cids = events.map((event: any) => event.data);
 
@@ -139,7 +143,25 @@ query EventQuery {
       return [];
     }
   };
+  export const fetchAllContentCIDs = async (): Promise<string[]> => {
+    const accountAddress = "0x61c8f3e7ecbcda5dd641c434b277a13b6076c09de32322ce197d2fe3f1e54ef1";
+    const eventType = `${moduleAddress}::BoxPeer::Content` as `${string}::${string}::${string}`;
+    try {
+      // Fetch events using the SDK
+        const events = await aptos.event.getAccountEventsByEventType({
+            accountAddress,
+            eventType: eventType,
+      });
 
+      // Map events to extract the CIDs or other relevant data
+      const cids = events.map((event: any) => event.data);
+    //   console.log("Events:", cids)
+      return cids;
+    } catch (error: any) {
+      console.error("Error fetching content events:", error);
+      return [];
+    }
+  };
 export const getPurchasersByCid = async(cid: string) => {
     const result = await aptos.view({
         payload: {
@@ -148,7 +170,7 @@ export const getPurchasersByCid = async(cid: string) => {
             functionArguments: [cid],
         },
     });
-    console.log(result)
+    // console.log(result)
     return result;
 }
 
