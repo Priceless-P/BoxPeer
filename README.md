@@ -78,6 +78,8 @@ Nodes on the BoxPeer network can earn rewards by locking content in their dashbo
 
 
 
+## See BoxPeer Web app [here](https://github.com/Priceless-P/BoxPeer-Web)
+
 ## Acknowledgments
 
 - **[libp2p](https://github.com/libp2p/rust-libp2p):** For enabling peer-to-peer networking.
