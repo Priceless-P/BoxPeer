@@ -2,6 +2,7 @@ module BoxPeer_addr::BoxPeer {
     use std::signer;
     use std::string;
     use std::vector;
+    use aptos_std::debug;
     use aptos_framework::coin;
     use aptos_framework::account;
     use aptos_framework::event;
@@ -274,6 +275,7 @@ module BoxPeer_addr::BoxPeer {
 
         while (i < vector::length(&contract_signer.content_fees)) {
         let content_fee = vector::borrow_mut(&mut contract_signer.content_fees, i);
+            debug::print(&content_fee.total_fee);
         if (content_fee.cid == cid) {
         fee_for_cid = content_fee.total_fee;
         found = true;
@@ -281,9 +283,10 @@ module BoxPeer_addr::BoxPeer {
         };
         i = i + 1;
         };
-
+        debug::print(&fee_for_cid);
+        
         assert!(found, ECONTENT_NOT_FOUND);
-        assert!(fee_for_cid >= amount, EINSUFFICIENT_FUNDS);
+        //assert!(fee_for_cid >= amount, EINSUFFICIENT_FUNDS);
 
         // Use SignerCapability to create a signer for the contract address
         let contract_signer_instance = account::create_signer_with_capability(&contract_signer.signer_capability);

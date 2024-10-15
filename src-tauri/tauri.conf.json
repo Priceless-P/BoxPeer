@@ -2,7 +2,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:1420",
+    "devPath": "http://localhost:1420/",
     "distDir": "../dist"
   },
   "package": {
@@ -26,6 +26,8 @@
     "windows": [
       {
         "title": "BoxPeer",
+        "label": "main",
+        "url": "index.html",
         "width": 800,
         "height": 600
       }
@@ -36,7 +38,7 @@
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.BoxPeer.app",
+      "identifier": "com.boxpee.app",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",

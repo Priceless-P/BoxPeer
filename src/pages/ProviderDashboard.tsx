@@ -126,9 +126,13 @@ const ProviderDashboard: React.FC = () => {
             message.info(result);
             const fileToMove = otherFiles.find(file => file.cid === cid);
             const amount = new U64(fileToMove.feePaid * 0.1);
+            console.log("Amount is ",amount)
             if (activeAccount) {
+            if (fileToMove.consumerFee != 0) {
                 const reward = await getReward(activeAccount, cid, amount);
                 message.success(reward)
+            }
+
             }
 
 

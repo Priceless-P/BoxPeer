@@ -102,7 +102,7 @@ impl P2PCDNClient {
         let blockstore = Arc::new(SledBlockstore::new(db).await.expect("Err"));
         let mut cfg = kad::Config::new(BOXPEER_PROTO_NAME);
 
-        cfg.set_periodic_bootstrap_interval(Some(Duration::from_secs(10)));
+        cfg.set_periodic_bootstrap_interval(Some(Duration::from_secs(60)));
         cfg.set_record_ttl(None);
 
         let mut swarm = SwarmBuilder::with_existing_identity(id_keys)

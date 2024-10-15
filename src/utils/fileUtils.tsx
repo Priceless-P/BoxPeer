@@ -32,8 +32,6 @@ export const useFileManager = () => {
             const purchasers = await getPurchasersByCid(cid);
 
             const result = purchasers.flat().includes(account.accountAddress.toString());
-
-            console.log(result)
             return result
         } catch (error) {
             console.error("Failed to fetch purchasers:", error);
@@ -65,7 +63,7 @@ export const useFileManager = () => {
 
         let filePreview;
         if (fileType === 'jpg' || fileType === 'png') {
-            filePreview = <img src={fileURL} alt={title} style={{ widows: '80%', borderRadius: '8px' }} />;
+            filePreview = <img src={fileURL} alt={title} style={{ width: '80%', borderRadius: '8px' }} />;
         } else if (fileType === 'mp4' || fileType === 'mkv') {
             filePreview = <video controls style={{ width: '80%' }} src={fileURL} />;
         } else if (fileType === 'mp3') {
@@ -75,10 +73,14 @@ export const useFileManager = () => {
         } else {
             filePreview = <a href={fileURL} download>Download File</a>;
         }
-        if (!activeAccount) {
-            return 'You need to connect wallet to proceed'
+        // if (!activeAccount) {
+        //     return 'You need to connect wallet to proceed'
+        // }
+        let purchased = false; // Default value
+
+        if (activeAccount) {
+          purchased = await hasPurchasedContent(cid, activeAccount);
         }
-        const purchased = await hasPurchasedContent(cid, activeAccount);
 
         const previewElement = (
             <Card
@@ -112,8 +114,6 @@ export const useFileManager = () => {
                 )}
             </Card>
         );
-
-        // Update context with the preview element and fileObject
         updatePreviewContent(cid, previewElement, fileObject);
     };
 
@@ -167,18 +167,18 @@ export const useFileManager = () => {
         }
     };
 
-    const getAllFiles = async (files: Uint8Array[]) => {
-        files.forEach((fileData, index) => {
-            const fileObject = fileObjects[index];
-            if (!fileObject) return;
+    const getAllFiles = async (files: { cid: string, fileData: Uint8Array }[]) => {
+        for (const { cid, fileData } of files) {
+            const fileObject = fileObjects.find((file) => file.cid === cid);
+            if (!fileObject) continue;
 
             const mimeType = getMimeType(fileObject.fileType);
-            const blob = new Blob([new Uint8Array(fileData)], { type: mimeType });
+            const blob = new Blob([fileData], { type: mimeType });
             const fileURL = URL.createObjectURL(blob);
-
-            getPreview(fileObject, fileURL);
-        });
+            await getPreview(fileObject, fileURL); // Update preview for each file
+        }
     };
+
 
     return {
         fileObjects,
